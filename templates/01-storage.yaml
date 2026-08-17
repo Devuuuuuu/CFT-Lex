@@ -1,0 +1,314 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  Creates or reuses the Amazon S3 buckets required for the DevOps Connect
+  IVR and Lex Migration solutions.
+
+Parameters:
+
+  BucketPrefix:
+    Type: String
+    Default: devops-connect
+    Description: Prefix used for naming IVR S3 buckets when they are created.
+
+  ExistingMigrationBucketName:
+    Type: String
+    Default: ''
+    Description: Existing migration bucket name. Leave empty to create one.
+
+  ExistingBackupBucketName:
+    Type: String
+    Default: ''
+    Description: Existing backup bucket name. Leave empty to create one.
+
+  ExistingArtifactBucketName:
+    Type: String
+    Default: ''
+    Description: Existing CodePipeline artifact bucket name. Leave empty to create one.
+
+  # --------------------------------------------------------------------------
+  # Lex S3 configuration
+  # --------------------------------------------------------------------------
+
+  LexUiBucketName:
+    Type: String
+    Default: devops-lex-ui-files
+    Description: >
+      Name of the temporary S3 bucket used by Devops-Lex-UI.
+
+  LexPublishBucketName:
+    Type: String
+    Default: devops-lex-scm-bkp-s3
+    Description: >
+      Name of the S3 bucket used by Devops-Lex-PublishLexZip during promotion.
+
+  ExistingLexUiBucketName:
+    Type: String
+    Default: ''
+    Description: >
+      Existing Lex UI S3 bucket name. Leave empty to create one.
+
+  ExistingLexPublishBucketName:
+    Type: String
+    Default: ''
+    Description: >
+      Existing Lex publish/source S3 bucket name. Leave empty to create one.
+
+
+Conditions:
+
+  CreateMigrationBucket:
+    !Equals
+      - !Ref ExistingMigrationBucketName
+      - ''
+
+  CreateBackupBucket:
+    !Equals
+      - !Ref ExistingBackupBucketName
+      - ''
+
+  CreateArtifactBucket:
+    !Equals
+      - !Ref ExistingArtifactBucketName
+      - ''
+
+  CreateLexUiBucket:
+    !Equals
+      - !Ref ExistingLexUiBucketName
+      - ''
+
+  CreateLexPublishBucket:
+    !Equals
+      - !Ref ExistingLexPublishBucketName
+      - ''
+
+
+Resources:
+
+  # ==========================================================================
+  # Existing IVR buckets
+  # ==========================================================================
+
+  MigrationBucket:
+    Type: AWS::S3::Bucket
+    Condition: CreateMigrationBucket
+
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+
+    Properties:
+
+      BucketName: !Sub "${BucketPrefix}-ui-gc-${AWS::AccountId}"
+
+      VersioningConfiguration:
+        Status: Enabled
+
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+
+      Tags:
+        - Key: Project
+          Value: DevOpsConnectMigration
+        - Key: Resource
+          Value: MigrationBucket
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  BackupBucket:
+    Type: AWS::S3::Bucket
+    Condition: CreateBackupBucket
+
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+
+    Properties:
+
+      BucketName: !Sub "${BucketPrefix}-backup-${AWS::AccountId}"
+
+      VersioningConfiguration:
+        Status: Enabled
+
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+
+      Tags:
+        - Key: Project
+          Value: DevOpsConnectMigration
+        - Key: Resource
+          Value: BackupBucket
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  ArtifactBucket:
+    Type: AWS::S3::Bucket
+    Condition: CreateArtifactBucket
+
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+
+    Properties:
+
+      BucketName: !Sub "${BucketPrefix}-artifacts-${AWS::AccountId}"
+
+      VersioningConfiguration:
+        Status: Enabled
+
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+
+      Tags:
+        - Key: Project
+          Value: DevOpsConnectMigration
+        - Key: Resource
+          Value: ArtifactBucket
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  # ==========================================================================
+  # Lex UI temporary bucket
+  # ==========================================================================
+
+  LexUiBucket:
+    Type: AWS::S3::Bucket
+    Condition: CreateLexUiBucket
+
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+
+    Properties:
+
+      BucketName: !Ref LexUiBucketName
+
+      VersioningConfiguration:
+        Status: Enabled
+
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+
+      Tags:
+        - Key: Project
+          Value: DevOpsConnectMigration
+        - Key: Resource
+          Value: LexUiBucket
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  # ==========================================================================
+  # Lex publish/source bucket
+  # ==========================================================================
+
+  LexPublishBucket:
+    Type: AWS::S3::Bucket
+    Condition: CreateLexPublishBucket
+
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+
+    Properties:
+
+      BucketName: !Ref LexPublishBucketName
+
+      VersioningConfiguration:
+        Status: Enabled
+
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+
+      Tags:
+        - Key: Project
+          Value: DevOpsConnectMigration
+        - Key: Resource
+          Value: LexPublishBucket
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+Outputs:
+
+  MigrationBucketName:
+    Description: Name of the migration bucket.
+    Value:
+      !If
+        - CreateMigrationBucket
+        - !Ref MigrationBucket
+        - !Ref ExistingMigrationBucketName
+
+
+  BackupBucketName:
+    Description: Name of the backup bucket.
+    Value:
+      !If
+        - CreateBackupBucket
+        - !Ref BackupBucket
+        - !Ref ExistingBackupBucketName
+
+
+  ArtifactBucketName:
+    Description: Name of the artifact bucket used by CodePipeline.
+    Value:
+      !If
+        - CreateArtifactBucket
+        - !Ref ArtifactBucket
+        - !Ref ExistingArtifactBucketName
+
+
+  LexUiBucketName:
+    Description: Name of the temporary Lex UI S3 bucket.
+    Value:
+      !If
+        - CreateLexUiBucket
+        - !Ref LexUiBucket
+        - !Ref ExistingLexUiBucketName
+
+
+  LexPublishBucketName:
+    Description: Name of the Lex publish/source S3 bucket.
+    Value:
+      !If
+        - CreateLexPublishBucket
+        - !Ref LexPublishBucket
+        - !Ref ExistingLexPublishBucketName

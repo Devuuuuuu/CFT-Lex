@@ -1,0 +1,441 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  Creates or reuses the AWS CodePipeline resources used for
+  Amazon Connect IVR Migration and Amazon Lex Migration.
+
+Parameters:
+
+  # ==========================================================================
+  # SHARED ARTIFACT STORE
+  # ==========================================================================
+
+  ArtifactBucketName:
+    Type: String
+    Description: >
+      S3 bucket used by CodePipeline for storing pipeline artifacts.
+
+
+  # ==========================================================================
+  # COMMON PIPELINE IAM ROLE
+  # ==========================================================================
+
+  PipelineRoleArn:
+    Type: String
+    Description: >
+      IAM role ARN assumed by CodePipeline.
+
+
+  # ==========================================================================
+  # IVR PIPELINE
+  # ==========================================================================
+
+  PipelineName:
+    Type: String
+    Default: Devops-Connect-Pipeline-BKP
+    Description: >
+      Name of the IVR CodePipeline.
+
+  RepositoryName:
+    Type: String
+    Default: Devops-Connect-Migration
+    Description: >
+      CodeCommit repository monitored by the IVR pipeline.
+
+  RepositoryBranch:
+    Type: String
+    Default: main
+    Description: >
+      Branch monitored by the IVR pipeline.
+
+  UpdateLambdaFunctionName:
+    Type: String
+    Default: Devops-Connect-UpdateContactFlowJson-BKP
+    Description: >
+      Lambda function invoked by the IVR pipeline.
+
+  ExistingPipelineName:
+    Type: String
+    Default: ''
+    Description: >
+      Existing IVR CodePipeline name.
+      Leave empty to create the pipeline.
+
+
+  # ==========================================================================
+  # LEX PIPELINE
+  # ==========================================================================
+
+  LexPipelineName:
+    Type: String
+    Default: Devops-Lex-Pipeline-BKP
+    Description: >
+      Name of the Lex CodePipeline.
+
+  LexRepositoryName:
+    Type: String
+    Default: Devops-Lex-SCM-BKP
+    Description: >
+      CodeCommit repository used by the Lex pipeline.
+
+  LexRepositoryBranch:
+    Type: String
+    Default: master
+    Description: >
+      Branch monitored by the Lex pipeline.
+
+  LexPublishBucketName:
+    Type: String
+    Description: >
+      S3 bucket into which the Lex CodeCommit artifact is extracted.
+
+  LexPublishLambdaFunctionName:
+    Type: String
+    Default: Devops-Lex-PublishLexZip-BKP
+    Description: >
+      Lambda function invoked by the Lex pipeline.
+
+  ExistingLexPipelineName:
+    Type: String
+    Default: ''
+    Description: >
+      Existing Lex CodePipeline name.
+      Leave empty to create the pipeline.
+
+
+Conditions:
+
+  CreateIVRPipeline:
+    !Equals
+      - !Ref ExistingPipelineName
+      - ''
+
+  CreateLexPipeline:
+    !Equals
+      - !Ref ExistingLexPipelineName
+      - ''
+
+
+Resources:
+
+  # ==========================================================================
+  # IVR PIPELINE
+  # ==========================================================================
+
+  MigrationPipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Condition: CreateIVRPipeline
+
+    Properties:
+
+      Name: !Ref PipelineName
+
+      RoleArn: !Ref PipelineRoleArn
+
+      PipelineType: V1
+
+      ExecutionMode: SUPERSEDED
+
+      ArtifactStore:
+        Type: S3
+        Location: !Ref ArtifactBucketName
+
+      Stages:
+
+        # ----------------------------------------------------------------------
+        # Source
+        # ----------------------------------------------------------------------
+
+        - Name: Source
+
+          Actions:
+
+            - Name: Source
+
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeCommit
+                Version: '1'
+
+              Configuration:
+
+                RepositoryName:
+                  !Ref RepositoryName
+
+                BranchName:
+                  !Ref RepositoryBranch
+
+                PollForSourceChanges: true
+
+                OutputArtifactFormat: CODE_ZIP
+
+              OutputArtifacts:
+
+                - Name: SourceArtifact
+
+              RunOrder: 1
+
+
+        # ----------------------------------------------------------------------
+        # Lambda
+        # ----------------------------------------------------------------------
+
+        - Name: LambdaStage
+
+          Actions:
+
+            - Name: LambdaAction
+
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: '1'
+
+              Configuration:
+
+                FunctionName:
+                  !Ref UpdateLambdaFunctionName
+
+              InputArtifacts:
+
+                - Name: SourceArtifact
+
+              RunOrder: 1
+
+
+  # ==========================================================================
+  # IVR PIPELINE → LAMBDA PERMISSION
+  # ==========================================================================
+
+  CodePipelineLambdaPermission:
+    Type: AWS::Lambda::Permission
+
+    Properties:
+
+      Action:
+        lambda:InvokeFunction
+
+      FunctionName:
+        !Ref UpdateLambdaFunctionName
+
+      Principal:
+        codepipeline.amazonaws.com
+
+
+  # ==========================================================================
+  # LEX PIPELINE
+  # ==========================================================================
+
+  LexMigrationPipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Condition: CreateLexPipeline
+
+    Properties:
+
+      Name:
+        !Ref LexPipelineName
+
+      RoleArn:
+        !Ref PipelineRoleArn
+
+      PipelineType: V1
+
+      ExecutionMode: SUPERSEDED
+
+      ArtifactStore:
+
+        Type: S3
+
+        Location:
+          !Ref ArtifactBucketName
+
+      Stages:
+
+        # ----------------------------------------------------------------------
+        # LEX SOURCE STAGE
+        # ----------------------------------------------------------------------
+
+        - Name: Source
+
+          Actions:
+
+            - Name: Source
+
+              ActionTypeId:
+
+                Category: Source
+                Owner: AWS
+                Provider: CodeCommit
+                Version: '1'
+
+              Configuration:
+
+                RepositoryName:
+                  !Ref LexRepositoryName
+
+                BranchName:
+                  !Ref LexRepositoryBranch
+
+                # Matches the currently deployed Lex BKP pipeline.
+                # The pipeline is not using CodePipeline polling.
+                PollForSourceChanges: false
+
+                OutputArtifactFormat: CODE_ZIP
+
+              OutputArtifacts:
+
+                - Name: SourceArtifact
+
+              RunOrder: 1
+
+
+        # ----------------------------------------------------------------------
+        # LEX S3 DEPLOY STAGE
+        #
+        # This reproduces the live:
+        #
+        # SourceArtifact → devops-lex-scm-bkp-s3
+        #
+        # configuration observed in Devops-Lex-Pipeline-BKP.
+        # ----------------------------------------------------------------------
+
+        - Name: S3DeployStage
+
+          Actions:
+
+            - Name: S3Action
+
+              ActionTypeId:
+
+                Category: Deploy
+                Owner: AWS
+                Provider: S3
+                Version: '1'
+
+              Configuration:
+
+                BucketName:
+                  !Ref LexPublishBucketName
+
+                Extract: true
+
+              InputArtifacts:
+
+                - Name: SourceArtifact
+
+              RunOrder: 1
+
+
+        # ----------------------------------------------------------------------
+        # LEX PUBLISH LAMBDA
+        # ----------------------------------------------------------------------
+
+        - Name: DeployStage
+
+          Actions:
+
+            - Name: LambdaAction
+
+              ActionTypeId:
+
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: '1'
+
+              Configuration:
+
+                FunctionName:
+                  !Ref LexPublishLambdaFunctionName
+
+              # The Lambda does not consume SourceArtifact directly.
+              # It reads config.json and ZIPs using CodeCommit/S3.
+              InputArtifacts: []
+
+              RunOrder: 1
+
+
+  # ==========================================================================
+  # LEX PIPELINE → LAMBDA PERMISSION
+  # ==========================================================================
+
+  LexCodePipelineLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Condition: CreateLexPipeline
+
+    Properties:
+
+      Action:
+        lambda:InvokeFunction
+
+      FunctionName:
+        !Ref LexPublishLambdaFunctionName
+
+      Principal:
+        codepipeline.amazonaws.com
+
+
+Outputs:
+
+  # ==========================================================================
+  # IVR OUTPUTS
+  # ==========================================================================
+
+  PipelineName:
+
+    Description:
+      Name of the IVR CodePipeline.
+
+    Value:
+      !If
+        - CreateIVRPipeline
+        - !Ref MigrationPipeline
+        - !Ref ExistingPipelineName
+
+
+  PipelineArn:
+
+    Description:
+      ARN of the IVR CodePipeline.
+
+    Value:
+      !Sub
+        - 'arn:${AWS::Partition}:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}'
+        - Pipeline:
+            !If
+              - CreateIVRPipeline
+              - !Ref MigrationPipeline
+              - !Ref ExistingPipelineName
+
+
+  # ==========================================================================
+  # LEX OUTPUTS
+  # ==========================================================================
+
+  LexPipelineName:
+
+    Description:
+      Name of the Lex CodePipeline.
+
+    Value:
+      !If
+        - CreateLexPipeline
+        - !Ref LexMigrationPipeline
+        - !Ref ExistingLexPipelineName
+
+
+  LexPipelineArn:
+
+    Description:
+      ARN of the Lex CodePipeline.
+
+    Value:
+      !Sub
+        - 'arn:${AWS::Partition}:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}'
+        - Pipeline:
+            !If
+              - CreateLexPipeline
+              - !Ref LexMigrationPipeline
+              - !Ref ExistingLexPipelineName

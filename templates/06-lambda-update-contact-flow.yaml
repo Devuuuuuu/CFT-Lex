@@ -1,0 +1,102 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  DevOps Connect - UpdateContactFlowJson-BKP Lambda. Invoked as a Lambda
+  action from the CodePipeline stage (root.yaml pipeline). Reads config.json
+  and flow JSON from CodeCommit, backs up any existing target flow to S3,
+  then creates or updates the contact flow/module on the target Connect
+  instance and writes audit trail entries. Must always signal back to
+  CodePipeline via PutJobSuccessResult/PutJobFailureResult - a bare
+  exception with no failure signal leaves the pipeline stage hanging
+  instead of failing fast, so that's enforced in the handler.
+
+Parameters:
+  BackupBucketName:
+    Type: String
+    Description: Actual bucket name from 01-storage.yaml's BackupBucketName output (not reconstructed here).
+
+  AuditTableName:
+    Type: String
+    Description: DynamoDB table storing migration audit trail entries.
+
+  CodeCommitRepoName:
+    Type: String
+    Description: CodeCommit repo storing migration artifacts and flow JSON.
+
+  FunctionName:
+    Type: String
+    Default: Devops-Connect-UpdateContactFlowJson-BKP
+
+  ExecutionRoleArn:
+    Type: String
+    Description: >
+      ARN of the IAM execution role for this function, exported from the
+      IAM nested stack (04-iam.yaml).
+
+  LambdaCodeS3Bucket:
+    Type: String
+    Description: S3 bucket (populated by deploy.sh) holding the packaged Lambda zip.
+
+  LambdaCodeS3Key:
+    Type: String
+    Default: lambda-src/update-contact-flow.zip
+    Description: S3 key of the packaged Lambda zip for this function.
+
+  ExistingFunctionArn:
+    Type: String
+    Default: ''
+    Description: Existing Update Contact Flow Lambda ARN. Leave empty to create the function.
+
+  MemorySize:
+    Type: Number
+    Default: 128
+    Description: Matches current console config.
+
+  TimeoutSeconds:
+    Type: Number
+    Default: 300
+    Description: >
+      Console currently has this at 30s, which is tight for a loop doing
+      per-flow S3 + CodeCommit + Connect + DynamoDB calls. Defaulting to
+      5 min here; override back to 30 via deploy.config if you've verified
+      30s holds up under real pipeline runs.
+
+Conditions:
+  CreateFunction: !Equals [!Ref ExistingFunctionArn, '']
+
+Resources:
+  UpdateContactFlowFunction:
+    Type: AWS::Lambda::Function
+    Condition: CreateFunction
+    Properties:
+      FunctionName: !Ref FunctionName
+      Description: Applies migrated contact flow/module JSON to the target Connect instance, triggered by CodePipeline.
+      Runtime: python3.12
+      Handler: lambda_function.lambda_handler
+      Architectures:
+        - x86_64
+      Role: !Ref ExecutionRoleArn
+      MemorySize: !Ref MemorySize
+      Timeout: !Ref TimeoutSeconds
+      Code:
+        S3Bucket: !Ref LambdaCodeS3Bucket
+        S3Key: !Ref LambdaCodeS3Key
+      Environment:
+        Variables:
+          AUDIT_TABLE_NAME: !Ref AuditTableName
+          CODECOMMIT_REPO_NAME: !Ref CodeCommitRepoName
+          DATA_BKP_BUCKET_NAME: !Ref BackupBucketName
+      Tags:
+        - Key: Application
+          Value: DevOps-Connect-IVR-Migration
+
+Outputs:
+  FunctionArn:
+    Description: ARN of the update-contact-flow Lambda.
+    Value: !If [CreateFunction, !GetAtt UpdateContactFlowFunction.Arn, !Ref ExistingFunctionArn]
+
+  FunctionName:
+    Description: Name of the update-contact-flow Lambda.
+    Value: !If
+      - CreateFunction
+      - !Ref UpdateContactFlowFunction
+      - !Select [6, !Split [':', !Ref ExistingFunctionArn]]

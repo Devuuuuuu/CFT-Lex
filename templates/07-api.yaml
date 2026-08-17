@@ -1,0 +1,279 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  Creates or reuses the shared DevopsConnect REST API and exposes the
+  IVR migration and Lex migration UI Lambda endpoints.
+
+Parameters:
+
+  ApiName:
+    Type: String
+    Default: DevopsConnect
+
+  StageName:
+    Type: String
+    Default: dev
+
+  UILambdaArn:
+    Type: String
+    Description: ARN of the IVR UI Lambda.
+
+  UILambdaName:
+    Type: String
+    Description: Name of the IVR UI Lambda.
+
+  LexUILambdaArn:
+    Type: String
+    Description: ARN of the Lex UI Lambda.
+
+  LexUILambdaName:
+    Type: String
+    Description: Name of the Lex UI Lambda.
+
+  ExistingApiId:
+    Type: String
+    Default: ''
+    Description: Existing API Gateway REST API ID. If supplied, the shared API is reused.
+
+  ExistingApiRootResourceId:
+    Type: String
+    Default: ''
+    Description: Existing API Gateway root resource ID. Required when reusing an existing API and creating a new route.
+
+  ExistingLexResourceId:
+    Type: String
+    Default: ''
+    Description: Existing /startpipelinelex resource ID. If supplied, the Lex route is reused and no Lex API resources are created.
+
+Conditions:
+
+  CreateApi: !Equals [!Ref ExistingApiId, '']
+  CreateLexRoute: !Equals [!Ref ExistingLexResourceId, '']
+
+Resources:
+
+  ###########################################################################
+  # REST API
+  ###########################################################################
+
+  DevOpsConnectApi:
+    Condition: CreateApi
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Ref ApiName
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  ###########################################################################
+  # /startpipeline - IVR
+  ###########################################################################
+
+  StartPipelineResource:
+    Condition: CreateApi
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt DevOpsConnectApi.RootResourceId
+      PathPart: startpipeline
+      RestApiId: !Ref DevOpsConnectApi
+
+  StartPipelineMethod:
+    Condition: CreateApi
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref DevOpsConnectApi
+      ResourceId: !Ref StartPipelineResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub >-
+          arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UILambdaArn}/invocations
+
+  StartPipelineOptionsMethod:
+    Condition: CreateApi
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref DevOpsConnectApi
+      ResourceId: !Ref StartPipelineResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: '200'
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  ###########################################################################
+  # IVR Lambda permission
+  ###########################################################################
+
+  ApiGatewayInvokePermission:
+    Condition: CreateApi
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref UILambdaName
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub >-
+        arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${DevOpsConnectApi}/*/POST/startpipeline
+
+  ###########################################################################
+  # /startpipelinelex - Lex
+  #
+  # When ExistingLexResourceId is populated, the route is already present
+  # in the reused API and CloudFormation does not attempt to recreate it.
+  ###########################################################################
+
+  StartPipelineLexResource:
+    Condition: CreateLexRoute
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !If
+        - CreateApi
+        - !GetAtt DevOpsConnectApi.RootResourceId
+        - !Ref ExistingApiRootResourceId
+      PathPart: startpipelinelex
+      RestApiId: !If
+        - CreateApi
+        - !Ref DevOpsConnectApi
+        - !Ref ExistingApiId
+
+  StartPipelineLexMethod:
+    Condition: CreateLexRoute
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !If
+        - CreateApi
+        - !Ref DevOpsConnectApi
+        - !Ref ExistingApiId
+      ResourceId: !Ref StartPipelineLexResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS
+        IntegrationHttpMethod: POST
+        PassthroughBehavior: WHEN_NO_MATCH
+        ContentHandling: CONVERT_TO_TEXT
+        TimeoutInMillis: 29000
+        Uri: !Sub >-
+          arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LexUILambdaArn}/invocations
+        IntegrationResponses:
+          - StatusCode: '200'
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+
+  StartPipelineLexOptionsMethod:
+    Condition: CreateLexRoute
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !If
+        - CreateApi
+        - !Ref DevOpsConnectApi
+        - !Ref ExistingApiId
+      ResourceId: !Ref StartPipelineLexResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: '200'
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'OPTIONS,POST'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Credentials: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+          ResponseModels:
+            application/json: Empty
+
+  ###########################################################################
+  # Lex Lambda permission
+  ###########################################################################
+
+  LexApiGatewayInvokePermission:
+    Condition: CreateLexRoute
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LexUILambdaName
+      Principal: apigateway.amazonaws.com
+      SourceArn: !If
+        - CreateApi
+        - !Sub >-
+            arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${DevOpsConnectApi}/*/POST/startpipelinelex
+        - !Sub >-
+            arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${ExistingApiId}/*/POST/startpipelinelex
+
+  ###########################################################################
+  # Deployment + stage
+  #
+  # These are created only when this stack owns the API. For an existing API
+  # with an already-existing dev stage, deploy.sh will later perform the
+  # API Gateway deployment/update operation after CloudFormation adds a route.
+  ###########################################################################
+
+  ApiDeployment:
+    Condition: CreateApi
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - StartPipelineMethod
+      - StartPipelineOptionsMethod
+      - StartPipelineLexMethod
+      - StartPipelineLexOptionsMethod
+    Properties:
+      RestApiId: !Ref DevOpsConnectApi
+
+  ApiStage:
+    Condition: CreateApi
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      StageName: !Ref StageName
+      RestApiId: !Ref DevOpsConnectApi
+      DeploymentId: !Ref ApiDeployment
+
+Outputs:
+
+  ApiId:
+    Description: Shared API Gateway ID.
+    Value: !If [CreateApi, !Ref DevOpsConnectApi, !Ref ExistingApiId]
+
+  InvokeUrl:
+    Description: Invoke URL for POST /startpipeline.
+    Value: !Sub
+      - 'https://${ApiIdValue}.execute-api.${AWS::Region}.amazonaws.com/${StageName}/startpipeline'
+      - ApiIdValue: !If [CreateApi, !Ref DevOpsConnectApi, !Ref ExistingApiId]
+
+  LexApiInvokeUrl:
+    Description: Invoke URL for POST /startpipelinelex.
+    Value: !Sub
+      - 'https://${ApiIdValue}.execute-api.${AWS::Region}.amazonaws.com/${StageName}/startpipelinelex'
+      - ApiIdValue: !If [CreateApi, !Ref DevOpsConnectApi, !Ref ExistingApiId]

@@ -1,0 +1,134 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  Creates or reuses the Devops-Lex-PublishLexZip Lambda.
+  Environment-specific resources are supplied through parameters.
+
+Parameters:
+
+  ExistingLexPublishLambdaArn:
+    Type: String
+    Default: ''
+    Description: >
+      Existing Devops-Lex-PublishLexZip Lambda ARN.
+      Leave empty to create the Lambda.
+
+  LambdaFunctionName:
+    Type: String
+    Default: Devops-Lex-PublishLexZip-BKP
+    Description: Name of the Lex publish Lambda.
+
+  ExecutionRoleArn:
+    Type: String
+    Description: IAM execution role ARN for the Lambda.
+
+  CodeS3Bucket:
+    Type: String
+    Description: S3 bucket containing the Lambda deployment package.
+
+  CodeS3Key:
+    Type: String
+    Description: S3 key containing the Lambda deployment package.
+
+  SourceS3BucketName:
+    Type: String
+    Description: >
+      S3 bucket containing Lex ZIP files and config.json
+      consumed during promotion.
+
+  CodeCommitRepositoryName:
+    Type: String
+    Description: CodeCommit repository containing config.json.
+
+  CodeCommitBranchName:
+    Type: String
+    Default: master
+    Description: CodeCommit branch used for promotion.
+
+  LexAuditTableName:
+    Type: String
+    Description: DynamoDB audit table used by Lex promotion.
+
+Conditions:
+
+  CreateLexPublishLambda:
+    !Equals
+      - !Ref ExistingLexPublishLambdaArn
+      - ''
+
+Resources:
+
+  LexPublishLambda:
+    Type: AWS::Lambda::Function
+    Condition: CreateLexPublishLambda
+
+    Properties:
+
+      FunctionName: !Ref LambdaFunctionName
+
+      Runtime: python3.14
+
+      Architectures:
+        - x86_64
+
+      Handler: lambda_function.lambda_handler
+
+      Role: !Ref ExecutionRoleArn
+
+      MemorySize: 128
+
+      Timeout: 900
+
+      Code:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: !Ref CodeS3Key
+
+      Environment:
+        Variables:
+
+          CODECOMMIT_REPO_NAME:
+            !Ref CodeCommitRepositoryName
+
+          CODECOMMIT_BRANCH_NAME:
+            !Ref CodeCommitBranchName
+
+          SOURCE_S3_BUCKET_NAME:
+            !Ref SourceS3BucketName
+
+          LEX_AUDIT_TABLE_NAME:
+            !Ref LexAuditTableName
+
+      Tags:
+
+        - Key: Name
+          Value: !Ref LambdaFunctionName
+
+        - Key: Application
+          Value: AWS-ConnectOps
+
+        - Key: Component
+          Value: Lex-Migration
+
+Outputs:
+
+  LexPublishLambdaArn:
+    Description: ARN of the Lex publish Lambda.
+
+    Value:
+      !If
+        - CreateLexPublishLambda
+        - !GetAtt LexPublishLambda.Arn
+        - !Ref ExistingLexPublishLambdaArn
+
+  LexPublishLambdaName:
+    Description: Name of the Lex publish Lambda.
+
+    Value:
+      !If
+        - CreateLexPublishLambda
+        - !Ref LexPublishLambda
+        - !Select
+          - 6
+          - !Split
+            - ':'
+            - !Ref ExistingLexPublishLambdaArn

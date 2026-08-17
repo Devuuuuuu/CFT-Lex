@@ -1,0 +1,220 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  Creates or reuses the DynamoDB tables required for the DevOps Connect
+  IVR and Lex Migration solutions.
+
+Parameters:
+
+  # --------------------------------------------------------------------------
+  # Existing IVR tables
+  # --------------------------------------------------------------------------
+
+  EnvironmentTableName:
+    Type: String
+    Default: DevOps-Envt-Table
+
+  AuditTableName:
+    Type: String
+    Default: Devops-Connect-AuditTrail
+
+  ExistingEnvironmentTableName:
+    Type: String
+    Default: ''
+
+  ExistingAuditTableName:
+    Type: String
+    Default: ''
+
+
+  # --------------------------------------------------------------------------
+  # Lex audit table
+  # --------------------------------------------------------------------------
+
+  LexAuditTableName:
+    Type: String
+    Default: Devops-Lex-AuditTrail
+
+  ExistingLexAuditTableName:
+    Type: String
+    Default: ''
+
+
+Conditions:
+
+  CreateEnvironmentTable:
+    !Equals
+      - !Ref ExistingEnvironmentTableName
+      - ''
+
+  CreateAuditTable:
+    !Equals
+      - !Ref ExistingAuditTableName
+      - ''
+
+  CreateLexAuditTable:
+    !Equals
+      - !Ref ExistingLexAuditTableName
+      - ''
+
+
+Resources:
+
+  # ==========================================================================
+  # Existing IVR tables
+  # ==========================================================================
+
+  EnvironmentTable:
+    Type: AWS::DynamoDB::Table
+    Condition: CreateEnvironmentTable
+
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+
+    Properties:
+
+      TableName: !Ref EnvironmentTableName
+
+      BillingMode: PAY_PER_REQUEST
+
+      AttributeDefinitions:
+        - AttributeName: Environment
+          AttributeType: S
+
+      KeySchema:
+        - AttributeName: Environment
+          KeyType: HASH
+
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+      SSESpecification:
+        SSEEnabled: true
+
+      Tags:
+        - Key: Project
+          Value: DevOpsConnectMigration
+        - Key: Resource
+          Value: EnvironmentTable
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  AuditTrailTable:
+    Type: AWS::DynamoDB::Table
+    Condition: CreateAuditTable
+
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+
+    Properties:
+
+      TableName: !Ref AuditTableName
+
+      BillingMode: PAY_PER_REQUEST
+
+      AttributeDefinitions:
+        - AttributeName: ProgressId
+          AttributeType: S
+
+        - AttributeName: Timestamp
+          AttributeType: S
+
+      KeySchema:
+        - AttributeName: ProgressId
+          KeyType: HASH
+
+        - AttributeName: Timestamp
+          KeyType: RANGE
+
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+      SSESpecification:
+        SSEEnabled: true
+
+      Tags:
+        - Key: Project
+          Value: DevOpsConnectMigration
+        - Key: Resource
+          Value: AuditTrailTable
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  # ==========================================================================
+  # Lex audit table
+  # ==========================================================================
+
+  LexAuditTrailTable:
+    Type: AWS::DynamoDB::Table
+    Condition: CreateLexAuditTable
+
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+
+    Properties:
+
+      TableName: !Ref LexAuditTableName
+
+      BillingMode: PAY_PER_REQUEST
+
+      AttributeDefinitions:
+
+        - AttributeName: ProgressId
+          AttributeType: S
+
+        - AttributeName: Timestamp
+          AttributeType: S
+
+      KeySchema:
+
+        - AttributeName: ProgressId
+          KeyType: HASH
+
+        - AttributeName: Timestamp
+          KeyType: RANGE
+
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+      SSESpecification:
+        SSEEnabled: true
+
+      Tags:
+
+        - Key: Project
+          Value: DevOpsConnectMigration
+
+        - Key: Resource
+          Value: LexAuditTrailTable
+
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+Outputs:
+
+  EnvironmentTableName:
+    Value:
+      !If
+        - CreateEnvironmentTable
+        - !Ref EnvironmentTable
+        - !Ref ExistingEnvironmentTableName
+
+
+  AuditTrailTableName:
+    Value:
+      !If
+        - CreateAuditTable
+        - !Ref AuditTrailTable
+        - !Ref ExistingAuditTableName
+
+
+  LexAuditTableName:
+    Description: Name of the Lex migration audit trail table.
+    Value:
+      !If
+        - CreateLexAuditTable
+        - !Ref LexAuditTrailTable
+        - !Ref ExistingLexAuditTableName

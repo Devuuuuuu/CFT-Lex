@@ -1,0 +1,727 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  Creates IAM roles and managed policies for the DevOps Connect
+  IVR Migration and Lex Migration solutions.
+  Existing roles can be supplied by ARN and will be reused.
+
+Parameters:
+
+  # ==========================================================================
+  # EXISTING IVR ROLES
+  # ==========================================================================
+
+  UILambdaRoleName:
+    Type: String
+    Default: DevOps-UI-GC-Lambda-Role
+
+  UpdateLambdaRoleName:
+    Type: String
+    Default: DevOps-UpdateContactFlow-Lambda-Role
+
+  PipelineRoleName:
+    Type: String
+    Default: DevOps-CodePipeline-Role
+
+  ExistingUILambdaRoleArn:
+    Type: String
+    Default: ''
+
+  ExistingUpdateLambdaRoleArn:
+    Type: String
+    Default: ''
+
+  ExistingPipelineRoleArn:
+    Type: String
+    Default: ''
+
+
+  # ==========================================================================
+  # NEW LEX ROLES
+  # ==========================================================================
+
+  LexUILambdaRoleName:
+    Type: String
+    Default: DevOps-Lex-UI-Lambda-Role
+
+  LexPublishLambdaRoleName:
+    Type: String
+    Default: DevOps-Lex-Publish-Lambda-Role
+
+  ExistingLexUILambdaRoleArn:
+    Type: String
+    Default: ''
+
+  ExistingLexPublishLambdaRoleArn:
+    Type: String
+    Default: ''
+
+
+  # ==========================================================================
+  # LEX BOT IMPORT ROLE
+  #
+  # Used only by the full-bot import path when config.json contains roleARN.
+  # The Lex Publish Lambda may need iam:PassRole for this supplied role.
+  # ==========================================================================
+
+  LexBotImportRoleArn:
+    Type: String
+    Default: ''
+
+
+Conditions:
+
+  # --------------------------------------------------------------------------
+  # Existing IVR roles
+  # --------------------------------------------------------------------------
+
+  CreateUILambdaRole:
+    !Equals
+      - !Ref ExistingUILambdaRoleArn
+      - ''
+
+  CreateUpdateLambdaRole:
+    !Equals
+      - !Ref ExistingUpdateLambdaRoleArn
+      - ''
+
+  CreatePipelineRole:
+    !Equals
+      - !Ref ExistingPipelineRoleArn
+      - ''
+
+
+  # --------------------------------------------------------------------------
+  # Lex roles
+  # --------------------------------------------------------------------------
+
+  CreateLexUILambdaRole:
+    !Equals
+      - !Ref ExistingLexUILambdaRoleArn
+      - ''
+
+  CreateLexPublishLambdaRole:
+    !Equals
+      - !Ref ExistingLexPublishLambdaRoleArn
+      - ''
+
+  HasLexBotImportRole:
+    !Not
+      - !Equals
+        - !Ref LexBotImportRoleArn
+        - ''
+
+
+Resources:
+
+  # ==========================================================================
+  # COMMON S3 ACCESS
+  #
+  # Used by IVR Lambdas and CodePipeline.
+  # We retain the existing wildcard-resource model used by the original
+  # deployment package.
+  # ==========================================================================
+
+  S3AccessPolicy:
+    Type: AWS::IAM::ManagedPolicy
+
+    Properties:
+
+      PolicyDocument:
+
+        Version: '2012-10-17'
+
+        Statement:
+
+          - Effect: Allow
+
+            Action:
+
+              - s3:GetObject
+              - s3:GetObjectVersion
+              - s3:PutObject
+              - s3:PutObjectAcl
+              - s3:DeleteObject
+              - s3:ListBucket
+              - s3:GetBucketVersioning
+
+            Resource: '*'
+
+
+  # ==========================================================================
+  # COMMON DYNAMODB ACCESS
+  # ==========================================================================
+
+  DynamoDBAccessPolicy:
+    Type: AWS::IAM::ManagedPolicy
+
+    Properties:
+
+      PolicyDocument:
+
+        Version: '2012-10-17'
+
+        Statement:
+
+          - Effect: Allow
+
+            Action:
+
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+              - dynamodb:UpdateItem
+              - dynamodb:DeleteItem
+              - dynamodb:Query
+              - dynamodb:Scan
+
+            Resource: '*'
+
+
+  # ==========================================================================
+  # COMMON CODECOMMIT ACCESS
+  # ==========================================================================
+
+  CodeCommitAccessPolicy:
+    Type: AWS::IAM::ManagedPolicy
+
+    Properties:
+
+      PolicyDocument:
+
+        Version: '2012-10-17'
+
+        Statement:
+
+          - Effect: Allow
+
+            Action:
+
+              - codecommit:GetRepository
+              - codecommit:GetBranch
+              - codecommit:GetCommit
+              - codecommit:GetFolder
+              - codecommit:GetFile
+              - codecommit:PutFile
+              - codecommit:CreateCommit
+              - codecommit:GitPull
+              - codecommit:GitPush
+              - codecommit:CancelUploadArchive
+              - codecommit:GetUploadArchiveStatus
+              - codecommit:UploadArchive
+
+            Resource: '*'
+
+
+  # ==========================================================================
+  # CODEPIPELINE JOB CONTROL
+  #
+  # Used by Devops-Lex-PublishLexZip-BKP.
+  # ==========================================================================
+
+  CodePipelineAccessPolicy:
+    Type: AWS::IAM::ManagedPolicy
+
+    Properties:
+
+      PolicyDocument:
+
+        Version: '2012-10-17'
+
+        Statement:
+
+          - Effect: Allow
+
+            Action:
+
+              - codepipeline:PutJobSuccessResult
+              - codepipeline:PutJobFailureResult
+
+            Resource: '*'
+
+
+  # ==========================================================================
+  # EXISTING CONNECT ACCESS
+  # ==========================================================================
+
+  ConnectAccessPolicy:
+    Type: AWS::IAM::ManagedPolicy
+
+    Properties:
+
+      PolicyDocument:
+
+        Version: '2012-10-17'
+
+        Statement:
+
+          - Effect: Allow
+
+            Action:
+
+              - connect:ListContactFlows
+              - connect:DescribeContactFlow
+              - connect:CreateContactFlow
+              - connect:UpdateContactFlowContent
+              - connect:UpdateContactFlowName
+              - connect:DeleteContactFlow
+
+              - connect:ListContactFlowModules
+              - connect:DescribeContactFlowModule
+              - connect:CreateContactFlowModule
+              - connect:UpdateContactFlowModuleContent
+              - connect:DeleteContactFlowModule
+
+              - connect:ListQueues
+              - connect:DescribeQueue
+
+              - connect:ListLambdaFunctions
+              - connect:AssociateLambdaFunction
+              - connect:DisassociateLambdaFunction
+
+              - connect:ListBots
+              - connect:AssociateBot
+              - connect:DisassociateBot
+
+              - connect:DescribeInstance
+
+            Resource: '*'
+
+
+  # ==========================================================================
+  # LEX UI ACCESS
+  #
+  # Devops-Lex-UI performs:
+  #
+  #   ListBotLocales
+  #   CreateExport
+  #   DescribeExport
+  #   S3 Put/Get/List/Delete
+  #   CodeCommit GetBranch/CreateCommit
+  #   DynamoDB Query
+  # ==========================================================================
+
+  LexUIAccessPolicy:
+    Type: AWS::IAM::ManagedPolicy
+
+    Properties:
+
+      PolicyDocument:
+
+        Version: '2012-10-17'
+
+        Statement:
+
+          - Effect: Allow
+
+            Action:
+
+              - lex:DescribeBot
+              - lex:ListBots
+              - lex:ListBotLocales
+              - lex:DescribeBotLocale
+              - lex:CreateExport
+              - lex:DescribeExport
+
+            Resource: '*'
+
+
+  # ==========================================================================
+  # LEX PUBLISH ACCESS
+  #
+  # Devops-Lex-PublishLexZip-BKP performs:
+  #
+  #   CreateUploadUrl
+  #   StartImport
+  #   DescribeImport
+  #   ListBotLocales
+  #   DescribeBotLocale
+  #   BuildBotLocale
+  #   CreateBotVersion
+  #   DescribeBotVersion
+  #   ListBotVersions
+  #   ListBotAliases
+  #   UpdateBotAlias
+  # ==========================================================================
+
+  LexPublishAccessPolicy:
+    Type: AWS::IAM::ManagedPolicy
+
+    Properties:
+
+      PolicyDocument:
+
+        Version: '2012-10-17'
+
+        Statement:
+
+          - Effect: Allow
+
+            Action:
+
+              - lex:CreateUploadUrl
+              - lex:StartImport
+              - lex:DescribeImport
+
+              - lex:ListBotLocales
+              - lex:DescribeBotLocale
+              - lex:BuildBotLocale
+
+              - lex:CreateBotVersion
+              - lex:DescribeBotVersion
+              - lex:ListBotVersions
+
+              - lex:ListBotAliases
+              - lex:UpdateBotAlias
+
+            Resource: '*'
+
+
+  # ==========================================================================
+  # IAM PASSROLE FOR FULL BOT IMPORT
+  #
+  # Only created/attached when a bot import role is supplied.
+  # ==========================================================================
+
+  LexBotImportPassRolePolicy:
+    Type: AWS::IAM::ManagedPolicy
+
+    Condition: HasLexBotImportRole
+
+    Properties:
+
+      PolicyDocument:
+
+        Version: '2012-10-17'
+
+        Statement:
+
+          - Effect: Allow
+
+            Action:
+
+              - iam:PassRole
+
+            Resource:
+
+              - !Ref LexBotImportRoleArn
+
+
+  # ==========================================================================
+  # LAMBDA ACCESS
+  #
+  # Existing IVR resources may use this.
+  # ==========================================================================
+
+  LambdaAccessPolicy:
+    Type: AWS::IAM::ManagedPolicy
+
+    Properties:
+
+      PolicyDocument:
+
+        Version: '2012-10-17'
+
+        Statement:
+
+          - Effect: Allow
+
+            Action:
+
+              - lambda:GetFunction
+              - lambda:InvokeFunction
+              - lambda:ListFunctions
+
+            Resource: '*'
+
+
+  # ==========================================================================
+  # CLOUDWATCH LOGS
+  # ==========================================================================
+
+  CloudWatchLogsPolicy:
+    Type: AWS::IAM::ManagedPolicy
+
+    Properties:
+
+      PolicyDocument:
+
+        Version: '2012-10-17'
+
+        Statement:
+
+          - Effect: Allow
+
+            Action:
+
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+
+            Resource: '*'
+
+
+  # ==========================================================================
+  # EXISTING IVR UI LAMBDA ROLE
+  # ==========================================================================
+
+  UILambdaExecutionRole:
+    Type: AWS::IAM::Role
+
+    Condition: CreateUILambdaRole
+
+    Properties:
+
+      RoleName:
+        !Ref UILambdaRoleName
+
+      AssumeRolePolicyDocument:
+
+        Version: '2012-10-17'
+
+        Statement:
+
+          - Effect: Allow
+
+            Principal:
+              Service: lambda.amazonaws.com
+
+            Action:
+              - sts:AssumeRole
+
+      ManagedPolicyArns:
+
+        - !Ref S3AccessPolicy
+        - !Ref DynamoDBAccessPolicy
+        - !Ref CodeCommitAccessPolicy
+        - !Ref ConnectAccessPolicy
+        - !Ref LexUIAccessPolicy
+        - !Ref CloudWatchLogsPolicy
+        - !Ref LambdaAccessPolicy
+
+
+  # ==========================================================================
+  # EXISTING IVR UPDATE CONTACT FLOW ROLE
+  # ==========================================================================
+
+  UpdateLambdaExecutionRole:
+    Type: AWS::IAM::Role
+
+    Condition: CreateUpdateLambdaRole
+
+    Properties:
+
+      RoleName:
+        !Ref UpdateLambdaRoleName
+
+      AssumeRolePolicyDocument:
+
+        Version: '2012-10-17'
+
+        Statement:
+
+          - Effect: Allow
+
+            Principal:
+              Service: lambda.amazonaws.com
+
+            Action:
+              - sts:AssumeRole
+
+      ManagedPolicyArns:
+
+        - !Ref S3AccessPolicy
+        - !Ref DynamoDBAccessPolicy
+        - !Ref CodeCommitAccessPolicy
+        - !Ref ConnectAccessPolicy
+        - !Ref CloudWatchLogsPolicy
+        - !Ref CodePipelineAccessPolicy
+
+
+  # ==========================================================================
+  # SHARED CODEPIPELINE EXECUTION ROLE
+  #
+  # This now supports:
+  #
+  #   IVR Source → Lambda
+  #
+  #   Lex Source → S3 Deploy → Lambda
+  # ==========================================================================
+
+  CodePipelineExecutionRole:
+    Type: AWS::IAM::Role
+
+    Condition: CreatePipelineRole
+
+    Properties:
+
+      RoleName:
+        !Ref PipelineRoleName
+
+      AssumeRolePolicyDocument:
+
+        Version: '2012-10-17'
+
+        Statement:
+
+          - Effect: Allow
+
+            Principal:
+              Service: codepipeline.amazonaws.com
+
+            Action:
+              - sts:AssumeRole
+
+      ManagedPolicyArns:
+
+        - !Ref S3AccessPolicy
+        - !Ref CodeCommitAccessPolicy
+        - !Ref LambdaAccessPolicy
+
+
+  # ==========================================================================
+  # NEW LEX UI LAMBDA ROLE
+  # ==========================================================================
+
+  LexUILambdaExecutionRole:
+    Type: AWS::IAM::Role
+
+    Condition: CreateLexUILambdaRole
+
+    Properties:
+
+      RoleName:
+        !Ref LexUILambdaRoleName
+
+      AssumeRolePolicyDocument:
+
+        Version: '2012-10-17'
+
+        Statement:
+
+          - Effect: Allow
+
+            Principal:
+              Service: lambda.amazonaws.com
+
+            Action:
+              - sts:AssumeRole
+
+      ManagedPolicyArns:
+
+        - !Ref S3AccessPolicy
+        - !Ref DynamoDBAccessPolicy
+        - !Ref CodeCommitAccessPolicy
+        - !Ref LexUIAccessPolicy
+        - !Ref CloudWatchLogsPolicy
+
+
+  # ==========================================================================
+  # NEW LEX PUBLISH LAMBDA ROLE
+  # ==========================================================================
+
+  LexPublishLambdaExecutionRole:
+    Type: AWS::IAM::Role
+
+    Condition: CreateLexPublishLambdaRole
+
+    Properties:
+
+      RoleName:
+        !Ref LexPublishLambdaRoleName
+
+      AssumeRolePolicyDocument:
+
+        Version: '2012-10-17'
+
+        Statement:
+
+          - Effect: Allow
+
+            Principal:
+              Service: lambda.amazonaws.com
+
+            Action:
+              - sts:AssumeRole
+
+      ManagedPolicyArns:
+
+        - !Ref S3AccessPolicy
+        - !Ref DynamoDBAccessPolicy
+        - !Ref CodeCommitAccessPolicy
+        - !Ref CodePipelineAccessPolicy
+        - !Ref LexPublishAccessPolicy
+        - !Ref CloudWatchLogsPolicy
+        - !If
+          - HasLexBotImportRole
+          - !Ref LexBotImportPassRolePolicy
+          - !Ref AWS::NoValue
+
+
+Outputs:
+
+  # ==========================================================================
+  # EXISTING IVR OUTPUTS
+  # ==========================================================================
+
+  UILambdaRoleArn:
+
+    Description: ARN of the IVR UI Lambda execution role.
+
+    Value:
+
+      !If
+        - CreateUILambdaRole
+        - !GetAtt UILambdaExecutionRole.Arn
+        - !Ref ExistingUILambdaRoleArn
+
+
+  UpdateLambdaRoleArn:
+
+    Description: ARN of the IVR update Lambda execution role.
+
+    Value:
+
+      !If
+        - CreateUpdateLambdaRole
+        - !GetAtt UpdateLambdaExecutionRole.Arn
+        - !Ref ExistingUpdateLambdaRoleArn
+
+
+  PipelineRoleArn:
+
+    Description: ARN of the shared CodePipeline execution role.
+
+    Value:
+
+      !If
+        - CreatePipelineRole
+        - !GetAtt CodePipelineExecutionRole.Arn
+        - !Ref ExistingPipelineRoleArn
+
+
+  # ==========================================================================
+  # NEW LEX OUTPUTS
+  # ==========================================================================
+
+  LexUILambdaRoleArn:
+
+    Description: ARN of the Devops-Lex-UI Lambda execution role.
+
+    Value:
+
+      !If
+        - CreateLexUILambdaRole
+        - !GetAtt LexUILambdaExecutionRole.Arn
+        - !Ref ExistingLexUILambdaRoleArn
+
+
+  LexPublishLambdaRoleArn:
+
+    Description: ARN of the Devops-Lex-PublishLexZip Lambda execution role.
+
+    Value:
+
+      !If
+        - CreateLexPublishLambdaRole
+        - !GetAtt LexPublishLambdaExecutionRole.Arn
+        - !Ref ExistingLexPublishLambdaRoleArn

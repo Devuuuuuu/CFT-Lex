@@ -1,0 +1,235 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  Creates or reuses CloudWatch Log Groups for the IVR Migration and
+  Lex Migration Lambda functions.
+  Explicitly managing the log groups allows log retention to be controlled
+  through CloudFormation instead of relying on AWS defaults.
+
+Parameters:
+
+  # ==========================================================================
+  # IVR LAMBDAS
+  # ==========================================================================
+
+  UIGCFunctionName:
+    Type: String
+    Default: Devops-Connect-UI-GC
+    Description: Name of the UI-GC Lambda function.
+
+  UpdateFlowFunctionName:
+    Type: String
+    Default: Devops-Connect-UpdateContactFlowJson-BKP
+    Description: Name of the Update Contact Flow Lambda function.
+
+  ExistingUIGCLogGroupName:
+    Type: String
+    Default: ''
+
+  ExistingUpdateFlowLogGroupName:
+    Type: String
+    Default: ''
+
+
+  # ==========================================================================
+  # LEX LAMBDAS
+  # ==========================================================================
+
+  LexUIFunctionName:
+    Type: String
+    Default: Devops-Lex-UI
+    Description: Name of the Devops-Lex-UI Lambda function.
+
+  LexPublishFunctionName:
+    Type: String
+    Default: Devops-Lex-PublishLexZip-BKP
+    Description: Name of the Devops-Lex-PublishLexZip Lambda function.
+
+  ExistingLexUILogGroupName:
+    Type: String
+    Default: ''
+
+  ExistingLexPublishLogGroupName:
+    Type: String
+    Default: ''
+
+
+  # ==========================================================================
+  # COMMON
+  # ==========================================================================
+
+  LogRetentionDays:
+    Type: Number
+    Default: 30
+    Description: Number of days CloudWatch Logs should be retained.
+
+
+Conditions:
+
+  # --------------------------------------------------------------------------
+  # IVR
+  # --------------------------------------------------------------------------
+
+  CreateUIGCLogGroup:
+    !Equals
+      - !Ref ExistingUIGCLogGroupName
+      - ''
+
+  CreateUpdateFlowLogGroup:
+    !Equals
+      - !Ref ExistingUpdateFlowLogGroupName
+      - ''
+
+
+  # --------------------------------------------------------------------------
+  # LEX
+  # --------------------------------------------------------------------------
+
+  CreateLexUILogGroup:
+    !Equals
+      - !Ref ExistingLexUILogGroupName
+      - ''
+
+  CreateLexPublishLogGroup:
+    !Equals
+      - !Ref ExistingLexPublishLogGroupName
+      - ''
+
+
+Resources:
+
+  # ==========================================================================
+  # IVR - UI GC
+  # ==========================================================================
+
+  UIGCLogGroup:
+    Type: AWS::Logs::LogGroup
+
+    Condition: CreateUIGCLogGroup
+
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+
+    Properties:
+
+      LogGroupName:
+        !Sub "/aws/lambda/${UIGCFunctionName}"
+
+      RetentionInDays:
+        !Ref LogRetentionDays
+
+
+  # ==========================================================================
+  # IVR - UPDATE CONTACT FLOW
+  # ==========================================================================
+
+  UpdateFlowLogGroup:
+    Type: AWS::Logs::LogGroup
+
+    Condition: CreateUpdateFlowLogGroup
+
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+
+    Properties:
+
+      LogGroupName:
+        !Sub "/aws/lambda/${UpdateFlowFunctionName}"
+
+      RetentionInDays:
+        !Ref LogRetentionDays
+
+
+  # ==========================================================================
+  # LEX - UI
+  # ==========================================================================
+
+  LexUILogGroup:
+    Type: AWS::Logs::LogGroup
+
+    Condition: CreateLexUILogGroup
+
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+
+    Properties:
+
+      LogGroupName:
+        !Sub "/aws/lambda/${LexUIFunctionName}"
+
+      RetentionInDays:
+        !Ref LogRetentionDays
+
+
+  # ==========================================================================
+  # LEX - PUBLISH
+  # ==========================================================================
+
+  LexPublishLogGroup:
+    Type: AWS::Logs::LogGroup
+
+    Condition: CreateLexPublishLogGroup
+
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+
+    Properties:
+
+      LogGroupName:
+        !Sub "/aws/lambda/${LexPublishFunctionName}"
+
+      RetentionInDays: !Ref LogRetentionDays
+
+
+Outputs:
+
+  # ==========================================================================
+  # IVR OUTPUTS
+  # ==========================================================================
+
+  UIGCLogGroupName:
+
+    Description: CloudWatch Log Group used by the IVR UI-GC Lambda.
+
+    Value:
+      !If
+        - CreateUIGCLogGroup
+        - !Ref UIGCLogGroup
+        - !Ref ExistingUIGCLogGroupName
+
+
+  UpdateFlowLogGroupName:
+
+    Description: CloudWatch Log Group used by the IVR Update Contact Flow Lambda.
+
+    Value:
+      !If
+        - CreateUpdateFlowLogGroup
+        - !Ref UpdateFlowLogGroup
+        - !Ref ExistingUpdateFlowLogGroupName
+
+
+  # ==========================================================================
+  # LEX OUTPUTS
+  # ==========================================================================
+
+  LexUILogGroupName:
+
+    Description: CloudWatch Log Group used by Devops-Lex-UI.
+
+    Value:
+      !If
+        - CreateLexUILogGroup
+        - !Ref LexUILogGroup
+        - !Ref ExistingLexUILogGroupName
+
+
+  LexPublishLogGroupName:
+
+    Description: CloudWatch Log Group used by Devops-Lex-PublishLexZip-BKP.
+
+    Value:
+      !If
+        - CreateLexPublishLogGroup
+        - !Ref LexPublishLogGroup
+        - !Ref ExistingLexPublishLogGroupName

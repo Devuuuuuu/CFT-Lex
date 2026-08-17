@@ -1,0 +1,209 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  Creates or reuses the CodeCommit repositories used for the DevOps Connect
+  IVR and Lex Migration solutions.
+
+Parameters:
+
+  # --------------------------------------------------------------------------
+  # Existing IVR repository
+  # --------------------------------------------------------------------------
+
+  RepositoryName:
+    Type: String
+    Default: Devops-Connect-Migration
+
+  ExistingRepositoryName:
+    Type: String
+    Default: ''
+    Description: >
+      Existing IVR CodeCommit repository name.
+      Leave empty to create one.
+
+
+  # --------------------------------------------------------------------------
+  # Lex repository
+  # --------------------------------------------------------------------------
+
+  LexRepositoryName:
+    Type: String
+    Default: Devops-Lex-SCM-BKP
+
+  ExistingLexRepositoryName:
+    Type: String
+    Default: ''
+    Description: >
+      Existing Lex CodeCommit repository name.
+      Leave empty to create one.
+
+  LexRepositoryBranchName:
+    Type: String
+    Default: master
+    Description: >
+      Default branch used by the Lex migration process.
+
+
+Conditions:
+
+  CreateRepository:
+    !Equals
+      - !Ref ExistingRepositoryName
+      - ''
+
+  CreateLexRepository:
+    !Equals
+      - !Ref ExistingLexRepositoryName
+      - ''
+
+
+Resources:
+
+  # ==========================================================================
+  # Existing IVR repository
+  # ==========================================================================
+
+  MigrationRepository:
+    Type: AWS::CodeCommit::Repository
+    Condition: CreateRepository
+
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+
+    Properties:
+
+      RepositoryName: !Ref RepositoryName
+
+      RepositoryDescription: >
+        Repository for Amazon Connect IVR Migration. Stores contact flow JSON
+        files, configuration files, and migration artifacts.
+
+      Tags:
+        - Key: Project
+          Value: DevOpsConnectMigration
+        - Key: Resource
+          Value: CodeCommitRepository
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+  # ==========================================================================
+  # Lex repository
+  # ==========================================================================
+
+  LexMigrationRepository:
+    Type: AWS::CodeCommit::Repository
+    Condition: CreateLexRepository
+
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+
+    Properties:
+
+      RepositoryName: !Ref LexRepositoryName
+
+      RepositoryDescription: >
+        Repository for Amazon Lex migration. Stores exported Lex locale
+        packages and migration configuration files.
+
+      Tags:
+        - Key: Project
+          Value: DevOpsConnectMigration
+        - Key: Resource
+          Value: LexCodeCommitRepository
+        - Key: ManagedBy
+          Value: CloudFormation
+
+
+Outputs:
+
+  # ==========================================================================
+  # IVR repository outputs
+  # ==========================================================================
+
+  RepositoryName:
+    Value:
+      !If
+        - CreateRepository
+        - !GetAtt MigrationRepository.Name
+        - !Ref ExistingRepositoryName
+
+
+  RepositoryArn:
+    Value:
+      !If
+        - CreateRepository
+        - !GetAtt MigrationRepository.Arn
+        - !Sub
+          'arn:${AWS::Partition}:codecommit:${AWS::Region}:${AWS::AccountId}:${ExistingRepositoryName}'
+
+
+  CloneUrlHttp:
+    Value:
+      !If
+        - CreateRepository
+        - !GetAtt MigrationRepository.CloneUrlHttp
+        - !Sub
+          'https://git-codecommit.${AWS::Region}.amazonaws.com/v1/repos/${ExistingRepositoryName}'
+
+
+  CloneUrlSsh:
+    Value:
+      !If
+        - CreateRepository
+        - !GetAtt MigrationRepository.CloneUrlSsh
+        - !Sub
+          'ssh://git-codecommit.${AWS::Region}.amazonaws.com/v1/repos/${ExistingRepositoryName}'
+
+
+  # ==========================================================================
+  # Lex repository outputs
+  # ==========================================================================
+
+  LexRepositoryName:
+    Description: Name of the Lex CodeCommit repository.
+
+    Value:
+      !If
+        - CreateLexRepository
+        - !GetAtt LexMigrationRepository.Name
+        - !Ref ExistingLexRepositoryName
+
+
+  LexRepositoryArn:
+    Description: ARN of the Lex CodeCommit repository.
+
+    Value:
+      !If
+        - CreateLexRepository
+        - !GetAtt LexMigrationRepository.Arn
+        - !Sub
+          'arn:${AWS::Partition}:codecommit:${AWS::Region}:${AWS::AccountId}:${ExistingLexRepositoryName}'
+
+
+  LexCloneUrlHttp:
+    Description: HTTPS clone URL for the Lex repository.
+
+    Value:
+      !If
+        - CreateLexRepository
+        - !GetAtt LexMigrationRepository.CloneUrlHttp
+        - !Sub
+          'https://git-codecommit.${AWS::Region}.amazonaws.com/v1/repos/${ExistingLexRepositoryName}'
+
+
+  LexCloneUrlSsh:
+    Description: SSH clone URL for the Lex repository.
+
+    Value:
+      !If
+        - CreateLexRepository
+        - !GetAtt LexMigrationRepository.CloneUrlSsh
+        - !Sub
+          'ssh://git-codecommit.${AWS::Region}.amazonaws.com/v1/repos/${ExistingLexRepositoryName}'
+
+
+  LexRepositoryBranchName:
+    Description: Branch used by the Lex migration repository.
+
+    Value: !Ref LexRepositoryBranchName

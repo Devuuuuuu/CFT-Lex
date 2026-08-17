@@ -1,0 +1,113 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  DevOps Connect - UI-GC Lambda. This is the primary backend function for the
+  IVR Migration app: generates migration config + snapshots dev contact flow
+  JSON to S3, pushes those files to CodeCommit, lists contact flows for the
+  UI dropdowns, drives the revert workflow, polls migration progress, and
+  performs Lex/Lambda console-level associations on the target instance.
+  Takes its config values (bucket prefix, table names, repo name/branch) as
+  Parameters so it lines up 1:1 with root.yaml - nothing here is hardcoded.
+
+Parameters:
+  UiGcBucketName:
+    Type: String
+    Description: Actual bucket name from 01-storage.yaml's MigrationBucketName output (not reconstructed here).
+
+  BackupBucketName:
+    Type: String
+    Description: Actual bucket name from 01-storage.yaml's BackupBucketName output (not reconstructed here).
+
+  EnvtTableName:
+    Type: String
+    Description: DynamoDB table mapping environment name -> Connect Instance ID.
+
+  AuditTableName:
+    Type: String
+    Description: DynamoDB table storing migration audit trail entries.
+
+  CodeCommitRepoName:
+    Type: String
+    Description: CodeCommit repo storing migration artifacts and flow JSON.
+
+  CodeCommitBranchName:
+    Type: String
+    Default: main
+
+  FunctionName:
+    Type: String
+    Default: Devops-Connect-UI-GC
+
+  ExecutionRoleArn:
+    Type: String
+    Description: >
+      ARN of the IAM execution role for this function, exported from the
+      IAM nested stack (04-iam.yaml). Passed in rather than created here so
+      permissions stay centrally reviewable in one template.
+
+  LambdaCodeS3Bucket:
+    Type: String
+    Description: S3 bucket (populated by deploy.sh) holding the packaged Lambda zip.
+
+  LambdaCodeS3Key:
+    Type: String
+    Default: lambda-src/ui-gc.zip
+    Description: S3 key of the packaged Lambda zip for this function.
+
+  ExistingFunctionArn:
+    Type: String
+    Default: ''
+    Description: Existing UI-GC Lambda ARN. Leave empty to create the function.
+
+  MemorySize:
+    Type: Number
+    Default: 128
+    Description: Matches current console config. Revisit if function starts throttling on flow lists with many pages.
+
+  TimeoutSeconds:
+    Type: Number
+    Default: 900
+    Description: 15 min, matches current console config (this function does the heavy per-flow S3/Connect work).
+
+Conditions:
+  CreateFunction: !Equals [!Ref ExistingFunctionArn, '']
+
+Resources:
+  UiGcFunction:
+    Type: AWS::Lambda::Function
+    Condition: CreateFunction
+    Properties:
+      FunctionName: !Ref FunctionName
+      Description: IVR Migration UI backend - config generation, flow listing, revert, audit polling, console updates.
+      Runtime: python3.12
+      Handler: lambda_function.lambda_handler
+      Architectures:
+        - x86_64
+      Role: !Ref ExecutionRoleArn
+      MemorySize: !Ref MemorySize
+      Timeout: !Ref TimeoutSeconds
+      Code:
+        S3Bucket: !Ref LambdaCodeS3Bucket
+        S3Key: !Ref LambdaCodeS3Key
+      Environment:
+        Variables:
+          UI_GC_BUCKET_NAME: !Ref UiGcBucketName
+          DATA_BKP_BUCKET_NAME: !Ref BackupBucketName
+          ENVT_TABLE_NAME: !Ref EnvtTableName
+          AUDIT_TABLE_NAME: !Ref AuditTableName
+          CODECOMMIT_REPO_NAME: !Ref CodeCommitRepoName
+          CODECOMMIT_BRANCH_NAME: !Ref CodeCommitBranchName
+      Tags:
+        - Key: Application
+          Value: DevOps-Connect-IVR-Migration
+
+Outputs:
+  FunctionArn:
+    Description: ARN of the UI-GC Lambda.
+    Value: !If [CreateFunction, !GetAtt UiGcFunction.Arn, !Ref ExistingFunctionArn]
+
+  FunctionName:
+    Description: Name of the UI-GC Lambda.
+    Value: !If
+      - CreateFunction
+      - !Ref UiGcFunction
+      - !Select [6, !Split [':', !Ref ExistingFunctionArn]]

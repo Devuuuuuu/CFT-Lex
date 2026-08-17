@@ -1,0 +1,242 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  Creates the infrastructure required to host the IVR Migration
+  React frontend. The application is hosted in a private Amazon S3
+  bucket and securely served through Amazon CloudFront using
+  Origin Access Control (OAC).
+
+###############################################################################
+# PARAMETERS
+###############################################################################
+
+Parameters:
+
+  FrontendBucketPrefix:
+    Type: String
+    Default: devops-connect-frontend
+    Description: Prefix for the frontend hosting S3 bucket.
+
+  DefaultRootObject:
+    Type: String
+    Default: index.html
+    Description: Default object served by CloudFront.
+
+  ExistingFrontendBucketName:
+    Type: String
+    Default: ''
+
+  ExistingCloudFrontDistributionId:
+    Type: String
+    Default: ''
+
+  ExistingCloudFrontDomainName:
+    Type: String
+    Default: ''
+
+  PriceClass:
+    Type: String
+    Default: PriceClass_100
+
+    AllowedValues:
+      - PriceClass_100
+      - PriceClass_200
+      - PriceClass_All
+
+    Description: CloudFront Price Class.
+
+###############################################################################
+# RESOURCES
+###############################################################################
+
+Conditions:
+  CreateFrontend: !Equals [!Ref ExistingFrontendBucketName, '']
+
+Resources:
+
+###############################################################################
+# Frontend Hosting Bucket
+###############################################################################
+
+  FrontendBucket:
+    Condition: CreateFrontend
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Type: AWS::S3::Bucket
+
+    Properties:
+
+      BucketName: !Sub '${FrontendBucketPrefix}-${AWS::AccountId}'
+
+      VersioningConfiguration:
+
+        Status: Enabled
+
+      OwnershipControls:
+
+        Rules:
+
+          - ObjectOwnership: BucketOwnerPreferred
+
+      PublicAccessBlockConfiguration:
+
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+
+###############################################################################
+# CloudFront Origin Access Control
+###############################################################################
+
+  FrontendOriginAccessControl:
+    Condition: CreateFrontend
+
+
+    Type: AWS::CloudFront::OriginAccessControl
+
+    Properties:
+
+      OriginAccessControlConfig:
+
+        Name: !Sub '${AWS::StackName}-Frontend-OAC'
+
+        Description: Origin Access Control for IVR Migration Frontend
+
+        OriginAccessControlOriginType: s3
+
+        SigningBehavior: always
+
+        SigningProtocol: sigv4
+
+###############################################################################
+# CloudFront Distribution
+###############################################################################
+
+  FrontendDistribution:
+    Condition: CreateFrontend
+
+
+    Type: AWS::CloudFront::Distribution
+
+    Properties:
+
+      DistributionConfig:
+
+        Enabled: true
+
+        HttpVersion: http2
+
+        DefaultRootObject: !Ref DefaultRootObject
+
+        PriceClass: !Ref PriceClass
+
+        Origins:
+
+          - Id: FrontendS3Origin
+
+            DomainName: !GetAtt FrontendBucket.RegionalDomainName
+
+            OriginAccessControlId: !GetAtt FrontendOriginAccessControl.Id
+
+            S3OriginConfig: {}
+
+        DefaultCacheBehavior:
+
+          TargetOriginId: FrontendS3Origin
+
+          ViewerProtocolPolicy: redirect-to-https
+
+          Compress: true
+
+          AllowedMethods:
+
+            - GET
+            - HEAD
+
+          CachedMethods:
+
+            - GET
+            - HEAD
+
+          ForwardedValues:
+
+            QueryString: false
+
+            Cookies:
+
+              Forward: none
+
+        CustomErrorResponses:
+
+          - ErrorCode: 403
+
+            ResponseCode: 200
+
+            ResponsePagePath: /index.html
+
+          - ErrorCode: 404
+
+            ResponseCode: 200
+
+            ResponsePagePath: /index.html
+
+        ViewerCertificate:
+
+          CloudFrontDefaultCertificate: true
+
+###############################################################################
+# Bucket Policy
+###############################################################################
+
+  FrontendBucketPolicy:
+    Condition: CreateFrontend
+
+
+    Type: AWS::S3::BucketPolicy
+
+    Properties:
+
+      Bucket: !Ref FrontendBucket
+
+      PolicyDocument:
+
+        Version: '2012-10-17'
+
+        Statement:
+
+          - Sid: AllowCloudFrontService
+
+            Effect: Allow
+
+            Principal:
+
+              Service: cloudfront.amazonaws.com
+
+            Action:
+
+              - s3:GetObject
+
+            Resource:
+
+              - !Sub '${FrontendBucket.Arn}/*'
+
+            Condition:
+
+              StringEquals:
+
+                AWS:SourceArn: !Sub 'arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${FrontendDistribution}'
+
+###############################################################################
+# OUTPUTS
+###############################################################################
+
+Outputs:
+  FrontendBucketName:
+    Value: !If [CreateFrontend, !Ref FrontendBucket, !Ref ExistingFrontendBucketName]
+
+  CloudFrontDistributionId:
+    Value: !If [CreateFrontend, !Ref FrontendDistribution, !Ref ExistingCloudFrontDistributionId]
+
+  CloudFrontDomainName:
+    Value: !If [CreateFrontend, !GetAtt FrontendDistribution.DomainName, !Ref ExistingCloudFrontDomainName]
