@@ -48,9 +48,20 @@ Parameters:
 Conditions:
 
   CreateApi: !Equals [!Ref ExistingApiId, '']
+  Conditions:
+
+  CreateApi: !Equals
+    - !Ref ExistingApiId
+    - ''
+
   CreateLexRoute: !Or
-    - !Equals [!Ref ExistingApiId, '']
-    - !Equals [!Ref ExistingLexResourceId, '']
+    - !Equals
+      - !Ref ExistingApiId
+      - ''
+
+    - !Equals
+      - !Ref ExistingLexResourceId
+      - ''
 
 Resources:
 
