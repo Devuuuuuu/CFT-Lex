@@ -3,7 +3,9 @@ import boto3
 import datetime
 import requests
 import os
+import time
 import uuid
+from urllib.parse import urlparse
 
 from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Key
@@ -172,6 +174,9 @@ def lambda_handler(event, context):
                         f"Status={response['exportStatus']}"
                     )
 
+                else:
+                    time.sleep(2)
+
             print("Download URL:", downloadUrl)
 
             # Download exported Lex package
@@ -182,8 +187,9 @@ def lambda_handler(event, context):
 
             download_response.raise_for_status()
 
-            filename = downloadUrl.split("/")[-1]
-            filename = filename.split(".")[0]
+            # Extract filename robustly from the pre-signed URL
+            path = urlparse(downloadUrl).path
+            filename = path.split("/")[-1].rsplit(".", 1)[0]
 
             print("Export filename:", filename)
 

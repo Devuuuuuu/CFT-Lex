@@ -618,6 +618,9 @@ Resources:
         AuditTableName:
           !GetAtt DataStack.Outputs.AuditTrailTableName
 
+        EnvtTableName:
+          !GetAtt DataStack.Outputs.EnvironmentTableName
+
         CodeCommitRepoName:
           !GetAtt SourceControlStack.Outputs.RepositoryName
 

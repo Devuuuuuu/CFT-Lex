@@ -48,7 +48,9 @@ Parameters:
 Conditions:
 
   CreateApi: !Equals [!Ref ExistingApiId, '']
-  CreateLexRoute: !Equals [!Ref ExistingLexResourceId, '']
+  CreateLexRoute: !Or
+    - !Equals [!Ref ExistingApiId, '']
+    - !Equals [!Ref ExistingLexResourceId, '']
 
 Resources:
 
@@ -177,6 +179,8 @@ Resources:
           - StatusCode: '200'
             ResponseParameters:
               method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: $input.body
       MethodResponses:
         - StatusCode: '200'
           ResponseParameters:
