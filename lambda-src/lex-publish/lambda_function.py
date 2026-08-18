@@ -221,7 +221,8 @@ def publish_locales(json_object):
 
     for index, locale in enumerate(locales):
 
-        zip_key = f"{zipfiles[index]}.zip"
+        raw_zip = zipfiles[index]
+        zip_key = f"{raw_zip}.zip" if not raw_zip.endswith(".zip") else raw_zip
 
         print(
             f"Processing locale: {locale}, "
