@@ -92,6 +92,7 @@ Parameters:
 
   CodeCommitRepositoryName:
     Type: String
+    Default: Devops-Connect-SCM-BKP
 
   CodeCommitBranchName:
     Type: String

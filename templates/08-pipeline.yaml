@@ -38,7 +38,7 @@ Parameters:
 
   RepositoryName:
     Type: String
-    Default: Devops-Connect-Migration
+    Default: Devops-Connect-SCM-BKP
     Description: >
       CodeCommit repository monitored by the IVR pipeline.
 
