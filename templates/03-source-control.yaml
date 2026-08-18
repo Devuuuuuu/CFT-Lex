@@ -12,7 +12,7 @@ Parameters:
 
   RepositoryName:
     Type: String
-    Default:  Devops-Connect-SCM-BKP
+    Default: Devops-Connect-SCM-BKP
 
   ExistingRepositoryName:
     Type: String
