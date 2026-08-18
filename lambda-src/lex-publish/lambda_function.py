@@ -1,5 +1,6 @@
 import json
 import os
+import time
 import datetime
 import boto3
 import requests
@@ -52,6 +53,8 @@ def wait_for_import(import_id):
                 f"Status={status}"
             )
 
+        time.sleep(3)
+
 
 def wait_for_locale_build(
     bot_id,
@@ -88,6 +91,8 @@ def wait_for_locale_build(
                 f"LocaleId={locale_id}, "
                 f"Status={status}"
             )
+
+        time.sleep(3)
 
 
 def upload_zip_to_lex(zip_key):
@@ -137,7 +142,9 @@ def publish_full_bot(json_object):
     prod_bot_name = json_object["prodBotName"]
     role_arn = json_object["roleARN"]
 
-    zip_key = f"{json_object['zipfile']}.zip"
+    raw_zip = json_object["zipfile"]
+    zip_name = raw_zip if isinstance(raw_zip, str) else raw_zip[0]
+    zip_key = f"{zip_name}.zip" if not zip_name.endswith(".zip") else zip_name
 
     print("Production bot name:", prod_bot_name)
     print("Import role:", role_arn)

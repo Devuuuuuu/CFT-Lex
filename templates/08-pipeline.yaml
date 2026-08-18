@@ -211,6 +211,7 @@ Resources:
 
   CodePipelineLambdaPermission:
     Type: AWS::Lambda::Permission
+    Condition: CreateIVRPipeline
 
     Properties:
 

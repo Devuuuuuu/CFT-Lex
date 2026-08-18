@@ -1,6 +1,5 @@
 import json
 import boto3
-from base64 import b64decode
 import datetime
 import os
 
@@ -43,6 +42,7 @@ def lambda_handler(event, context):
         print(user)
         content_type = jsonObject['type']
         print(content_type)
+        failed_flows = []
         for index, cfname in enumerate(cfnames):
             s3 = boto3.resource('s3')
             cfnamex = cfname + '.json'
@@ -152,6 +152,7 @@ def lambda_handler(event, context):
                             'Flowname': cfname
                         }
                     )
+                    failed_flows.append(f"{cfname}: {e.response}")
                 except client.exceptions.DuplicateResourceException as e:
                     print(e)
                     print('cf already exists.', prodInstanceId)
@@ -248,6 +249,7 @@ def lambda_handler(event, context):
                                 'Flowname': cfname
                             }
                         )
+                        failed_flows.append(f"{cfname}: {e.response}")
                 except Exception as e:
                     print(e)
                     print(str(e))
@@ -263,6 +265,7 @@ def lambda_handler(event, context):
                             'Flowname': cfname
                         }
                     )
+                    failed_flows.append(f"{cfname}: {e}")
             if content_type == "module":
                 # check if prod Instance has the same flow
                 client = boto3.client('connect')
@@ -357,6 +360,7 @@ def lambda_handler(event, context):
                                 'Flowname': cfname
                             }
                         )
+                        failed_flows.append(f"{cfname}: {e.response}")
                     except Exception as Error:
                         print(Error)
                         print(str(Error))
@@ -372,6 +376,7 @@ def lambda_handler(event, context):
                                 'Flowname': cfname
                             }
                         )
+                        failed_flows.append(f"{cfname}: {Error}")
                 else:
                     try:
                         response = client.create_contact_flow_module(
@@ -418,6 +423,7 @@ def lambda_handler(event, context):
                                 'Flowname': cfname
                             }
                         )
+                        failed_flows.append(f"{cfname}: {e.response}")
                     except Exception as Error:
                         print(Error)
                         print(str(Error))
@@ -433,6 +439,10 @@ def lambda_handler(event, context):
                                 'Flowname': cfname
                             }
                         )
+                        failed_flows.append(f"{cfname}: {Error}")
+
+        if failed_flows:
+            raise RuntimeError("Flow migration failed for: " + ", ".join(failed_flows))
 
         # All flows/modules processed without an unhandled exception
         # bubbling out - tell CodePipeline this stage passed.
