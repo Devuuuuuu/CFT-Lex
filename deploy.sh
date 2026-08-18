@@ -37,7 +37,6 @@ set -Eeuo pipefail
 # ============================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
 CONFIG_FILE="$SCRIPT_DIR/deploy.config"
 
 
@@ -105,17 +104,12 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
 
         --config)
-
             [[ $# -ge 2 ]] || die "--config requires a file path"
-
             CONFIG_FILE="$2"
-
             shift 2
-
             ;;
 
         -h|--help)
-
             cat <<USAGE
 
 Usage:
@@ -135,15 +129,11 @@ The script:
   - prints stack outputs
 
 USAGE
-
             exit 0
-
             ;;
 
         *)
-
             die "Unknown argument: $1"
-
             ;;
 
     esac
@@ -245,9 +235,7 @@ required_vars=(
 )
 
 for v in "${required_vars[@]}"; do
-
     [[ -n "${!v:-}" ]] || die "$v is required in deploy.config"
-
 done
 
 
@@ -256,20 +244,14 @@ done
 # ============================================================
 
 ROOT_TEMPLATE_PATH="$SCRIPT_DIR/$ROOT_TEMPLATE"
-
 TEMPLATE_DIR_PATH="$SCRIPT_DIR/$TEMPLATE_DIR"
 
 UI_GC_SOURCE_PATH="$SCRIPT_DIR/$UI_GC_SOURCE_DIR"
-
 UPDATE_CONTACT_FLOW_SOURCE_PATH="$SCRIPT_DIR/$UPDATE_CONTACT_FLOW_SOURCE_DIR"
-
 LEX_UI_SOURCE_PATH="$SCRIPT_DIR/$LEX_UI_SOURCE_DIR"
-
 LEX_PUBLISH_SOURCE_PATH="$SCRIPT_DIR/$LEX_PUBLISH_SOURCE_DIR"
 
-
 BUILD_DIR="$SCRIPT_DIR/.deploy"
-
 PACKAGE_DIR="$BUILD_DIR/packages"
 
 mkdir -p "$PACKAGE_DIR"
@@ -282,19 +264,16 @@ mkdir -p "$PACKAGE_DIR"
 aws_cmd() {
 
     if [[ -n "${AWS_PROFILE:-}" ]]; then
-
         aws \
             --profile "$AWS_PROFILE" \
             --region "$AWS_REGION" \
             "$@"
-
     else
-
         aws \
             --region "$AWS_REGION" \
             "$@"
-
     fi
+
 }
 
 
@@ -303,37 +282,28 @@ aws_cmd() {
 # ============================================================
 
 require_command() {
-
     command -v "$1" >/dev/null 2>&1 \
         || die "Required command not found: $1"
-
 }
-
 
 require_command aws
 require_command zip
 require_command python3
 
-
 [[ -f "$ROOT_TEMPLATE_PATH" ]] \
     || die "Root template not found: $ROOT_TEMPLATE_PATH"
-
 
 [[ -d "$TEMPLATE_DIR_PATH" ]] \
     || die "Template directory not found: $TEMPLATE_DIR_PATH"
 
-
 [[ -d "$UI_GC_SOURCE_PATH" ]] \
     || die "UI-GC Lambda source not found: $UI_GC_SOURCE_PATH"
-
 
 [[ -d "$UPDATE_CONTACT_FLOW_SOURCE_PATH" ]] \
     || die "Update Contact Flow Lambda source not found: $UPDATE_CONTACT_FLOW_SOURCE_PATH"
 
-
 [[ -d "$LEX_UI_SOURCE_PATH" ]] \
     || die "Lex UI Lambda source not found: $LEX_UI_SOURCE_PATH"
-
 
 [[ -d "$LEX_PUBLISH_SOURCE_PATH" ]] \
     || die "Lex Publish Lambda source not found: $LEX_PUBLISH_SOURCE_PATH"
@@ -344,9 +314,7 @@ require_command python3
 # ============================================================
 
 if ! python3 -m pip --version >/dev/null 2>&1; then
-
     die "python3 -m pip is required for Lambda dependency packaging"
-
 fi
 
 
@@ -423,17 +391,14 @@ else
 
     fi
 
-
     aws_cmd s3api put-bucket-versioning \
         --bucket "$DEPLOYMENT_BUCKET" \
         --versioning-configuration Status=Enabled
-
 
     aws_cmd s3api put-public-access-block \
         --bucket "$DEPLOYMENT_BUCKET" \
         --public-access-block-configuration \
         "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
-
 
     success \
         "Deployment bucket created: $DEPLOYMENT_BUCKET"
@@ -489,66 +454,50 @@ if [[ "$ROOT_STACK_EXISTS" == "true" ]]; then
     value="$(get_stack_parameter ExistingMigrationBucketName)"
     [[ "$value" == "None" ]] || [[ -z "$value" ]] || EXISTING_MIGRATION_BUCKET_NAME="$value"
 
-
     value="$(get_stack_parameter ExistingBackupBucketName)"
     [[ "$value" == "None" ]] || [[ -z "$value" ]] || EXISTING_BACKUP_BUCKET_NAME="$value"
-
 
     value="$(get_stack_parameter ExistingArtifactBucketName)"
     [[ "$value" == "None" ]] || [[ -z "$value" ]] || EXISTING_ARTIFACT_BUCKET_NAME="$value"
 
-
     value="$(get_stack_parameter ExistingEnvironmentTableName)"
     [[ "$value" == "None" ]] || [[ -z "$value" ]] || EXISTING_ENVIRONMENT_TABLE_NAME="$value"
-
 
     value="$(get_stack_parameter ExistingAuditTableName)"
     [[ "$value" == "None" ]] || [[ -z "$value" ]] || EXISTING_AUDIT_TABLE_NAME="$value"
 
-
     value="$(get_stack_parameter ExistingRepositoryName)"
     [[ "$value" == "None" ]] || [[ -z "$value" ]] || EXISTING_REPOSITORY_NAME="$value"
-
 
     value="$(get_stack_parameter ExistingUILambdaRoleArn)"
     [[ "$value" == "None" ]] || [[ -z "$value" ]] || EXISTING_UI_LAMBDA_ROLE_ARN="$value"
 
-
     value="$(get_stack_parameter ExistingUpdateLambdaRoleArn)"
     [[ "$value" == "None" ]] || [[ -z "$value" ]] || EXISTING_UPDATE_LAMBDA_ROLE_ARN="$value"
-
 
     value="$(get_stack_parameter ExistingPipelineRoleArn)"
     [[ "$value" == "None" ]] || [[ -z "$value" ]] || EXISTING_PIPELINE_ROLE_ARN="$value"
 
-
     value="$(get_stack_parameter ExistingUiGcLambdaArn)"
     [[ "$value" == "None" ]] || [[ -z "$value" ]] || EXISTING_UI_GC_LAMBDA_ARN="$value"
-
 
     value="$(get_stack_parameter ExistingUpdateContactFlowLambdaArn)"
     [[ "$value" == "None" ]] || [[ -z "$value" ]] || EXISTING_UPDATE_CONTACT_FLOW_LAMBDA_ARN="$value"
 
-
     value="$(get_stack_parameter ExistingApiId)"
     [[ "$value" == "None" ]] || [[ -z "$value" ]] || EXISTING_API_ID="$value"
-
 
     value="$(get_stack_parameter ExistingApiRootResourceId)"
     [[ "$value" == "None" ]] || [[ -z "$value" ]] || EXISTING_API_ROOT_RESOURCE_ID="$value"
 
-
     value="$(get_stack_parameter ExistingLexResourceId)"
     [[ "$value" == "None" ]] || [[ -z "$value" ]] || EXISTING_LEX_RESOURCE_ID="$value"
-
 
     value="$(get_stack_parameter ExistingPipelineName)"
     [[ "$value" == "None" ]] || [[ -z "$value" ]] || EXISTING_PIPELINE_NAME="$value"
 
-
     value="$(get_stack_parameter ExistingUIGCLogGroupName)"
     [[ "$value" == "None" ]] || [[ -z "$value" ]] || EXISTING_UI_GC_LOG_GROUP_NAME="$value"
-
 
     value="$(get_stack_parameter ExistingUpdateFlowLogGroupName)"
     [[ "$value" == "None" ]] || [[ -z "$value" ]] || EXISTING_UPDATE_FLOW_LOG_GROUP_NAME="$value"
@@ -561,42 +510,32 @@ if [[ "$ROOT_STACK_EXISTS" == "true" ]]; then
     value="$(get_stack_parameter ExistingLexUiBucketName)"
     [[ "$value" == "None" ]] || [[ -z "$value" ]] || EXISTING_LEX_UI_BUCKET_NAME="$value"
 
-
     value="$(get_stack_parameter ExistingLexPublishBucketName)"
     [[ "$value" == "None" ]] || [[ -z "$value" ]] || EXISTING_LEX_PUBLISH_BUCKET_NAME="$value"
-
 
     value="$(get_stack_parameter ExistingLexAuditTableName)"
     [[ "$value" == "None" ]] || [[ -z "$value" ]] || EXISTING_LEX_AUDIT_TABLE_NAME="$value"
 
-
     value="$(get_stack_parameter ExistingLexRepositoryName)"
     [[ "$value" == "None" ]] || [[ -z "$value" ]] || EXISTING_LEX_REPOSITORY_NAME="$value"
-
 
     value="$(get_stack_parameter ExistingLexUILambdaRoleArn)"
     [[ "$value" == "None" ]] || [[ -z "$value" ]] || EXISTING_LEX_UI_LAMBDA_ROLE_ARN="$value"
 
-
     value="$(get_stack_parameter ExistingLexPublishLambdaRoleArn)"
     [[ "$value" == "None" ]] || [[ -z "$value" ]] || EXISTING_LEX_PUBLISH_LAMBDA_ROLE_ARN="$value"
-
 
     value="$(get_stack_parameter ExistingLexUILambdaArn)"
     [[ "$value" == "None" ]] || [[ -z "$value" ]] || EXISTING_LEX_UI_LAMBDA_ARN="$value"
 
-
     value="$(get_stack_parameter ExistingLexPublishLambdaArn)"
     [[ "$value" == "None" ]] || [[ -z "$value" ]] || EXISTING_LEX_PUBLISH_LAMBDA_ARN="$value"
-
 
     value="$(get_stack_parameter ExistingLexPipelineName)"
     [[ "$value" == "None" ]] || [[ -z "$value" ]] || EXISTING_LEX_PIPELINE_NAME="$value"
 
-
     value="$(get_stack_parameter ExistingLexUILogGroupName)"
     [[ "$value" == "None" ]] || [[ -z "$value" ]] || EXISTING_LEX_UI_LOG_GROUP_NAME="$value"
-
 
     value="$(get_stack_parameter ExistingLexPublishLogGroupName)"
     [[ "$value" == "None" ]] || [[ -z "$value" ]] || EXISTING_LEX_PUBLISH_LOG_GROUP_NAME="$value"
@@ -609,10 +548,8 @@ if [[ "$ROOT_STACK_EXISTS" == "true" ]]; then
     value="$(get_stack_parameter ExistingFrontendBucketName)"
     [[ "$value" == "None" ]] || [[ -z "$value" ]] || EXISTING_FRONTEND_BUCKET_NAME="$value"
 
-
     value="$(get_stack_parameter ExistingCloudFrontDistributionId)"
     [[ "$value" == "None" ]] || [[ -z "$value" ]] || EXISTING_CLOUDFRONT_DISTRIBUTION_ID="$value"
-
 
     value="$(get_stack_parameter ExistingCloudFrontDomainName)"
     [[ "$value" == "None" ]] || [[ -z "$value" ]] || EXISTING_CLOUDFRONT_DOMAIN_NAME="$value"
@@ -636,9 +573,7 @@ if [[ "$ROOT_STACK_EXISTS" == "false" &&
     # --------------------------------------------------------
 
     STORAGE_MIGRATION_EXPECTED="${STORAGE_BUCKET_PREFIX}-ui-gc-${AWS_ACCOUNT_ID}"
-
     STORAGE_BACKUP_EXPECTED="${STORAGE_BUCKET_PREFIX}-backup-${AWS_ACCOUNT_ID}"
-
     STORAGE_ARTIFACT_EXPECTED="${STORAGE_BUCKET_PREFIX}-artifacts-${AWS_ACCOUNT_ID}"
 
 
@@ -931,6 +866,7 @@ if [[ "$ROOT_STACK_EXISTS" == "false" &&
         log \
             "Existing API detected: $EXISTING_API_ID"
 
+
         if [[ -z "${EXISTING_API_ROOT_RESOURCE_ID:-}" ]]; then
 
             EXISTING_API_ROOT_RESOURCE_ID="$(
@@ -1006,22 +942,18 @@ if [[ "$ROOT_STACK_EXISTS" == "false" &&
     # --------------------------------------------------------
 
     UI_LOG_GROUP="/aws/lambda/$UI_GC_LAMBDA_NAME"
-
     UPDATE_LOG_GROUP="/aws/lambda/$UPDATE_CONTACT_FLOW_LAMBDA_NAME"
-
     LEX_UI_LOG_GROUP="/aws/lambda/$LEX_UI_LAMBDA_NAME"
-
     LEX_PUBLISH_LOG_GROUP="/aws/lambda/$LEX_PUBLISH_LAMBDA_NAME"
 
 
     if [[ -z "${EXISTING_UI_GC_LOG_GROUP_NAME:-}" ]] &&
-
        aws_cmd logs describe-log-groups \
            --log-group-name-prefix "$UI_LOG_GROUP" \
            --query \
            "logGroups[?logGroupName=='${UI_LOG_GROUP}'].logGroupName | [0]" \
            --output text |
-           grep -qv '^None$'; then
+       grep -qv '^None$'; then
 
         EXISTING_UI_GC_LOG_GROUP_NAME="$UI_LOG_GROUP"
 
@@ -1029,13 +961,12 @@ if [[ "$ROOT_STACK_EXISTS" == "false" &&
 
 
     if [[ -z "${EXISTING_UPDATE_FLOW_LOG_GROUP_NAME:-}" ]] &&
-
        aws_cmd logs describe-log-groups \
            --log-group-name-prefix "$UPDATE_LOG_GROUP" \
            --query \
            "logGroups[?logGroupName=='${UPDATE_LOG_GROUP}'].logGroupName | [0]" \
            --output text |
-           grep -qv '^None$'; then
+       grep -qv '^None$'; then
 
         EXISTING_UPDATE_FLOW_LOG_GROUP_NAME="$UPDATE_LOG_GROUP"
 
@@ -1043,13 +974,12 @@ if [[ "$ROOT_STACK_EXISTS" == "false" &&
 
 
     if [[ -z "${EXISTING_LEX_UI_LOG_GROUP_NAME:-}" ]] &&
-
        aws_cmd logs describe-log-groups \
            --log-group-name-prefix "$LEX_UI_LOG_GROUP" \
            --query \
            "logGroups[?logGroupName=='${LEX_UI_LOG_GROUP}'].logGroupName | [0]" \
            --output text |
-           grep -qv '^None$'; then
+       grep -qv '^None$'; then
 
         EXISTING_LEX_UI_LOG_GROUP_NAME="$LEX_UI_LOG_GROUP"
 
@@ -1057,13 +987,12 @@ if [[ "$ROOT_STACK_EXISTS" == "false" &&
 
 
     if [[ -z "${EXISTING_LEX_PUBLISH_LOG_GROUP_NAME:-}" ]] &&
-
        aws_cmd logs describe-log-groups \
            --log-group-name-prefix "$LEX_PUBLISH_LOG_GROUP" \
            --query \
            "logGroups[?logGroupName=='${LEX_PUBLISH_LOG_GROUP}'].logGroupName | [0]" \
            --output text |
-           grep -qv '^None$'; then
+       grep -qv '^None$'; then
 
         EXISTING_LEX_PUBLISH_LOG_GROUP_NAME="$LEX_PUBLISH_LOG_GROUP"
 
@@ -1083,13 +1012,9 @@ show_plan() {
     local reuse_label="$3"
 
     if [[ -n "$value" ]]; then
-
         echo "  $reuse_label: $value"
-
     else
-
         echo "  $create_label"
-
     fi
 
 }
@@ -1219,15 +1144,20 @@ show_plan \
     "API Gateway: CREATE" \
     "API Gateway: REUSE"
 
+
 if [[ -n "${EXISTING_API_ID:-}" ]]; then
 
-    echo "  Existing API root resource: ${EXISTING_API_ROOT_RESOURCE_ID:-CREATE/DISCOVER}"
+    echo \
+        "  Existing API root resource: ${EXISTING_API_ROOT_RESOURCE_ID:-CREATE/DISCOVER}"
 
-    echo "  Existing /startpipelinelex resource: ${EXISTING_LEX_RESOURCE_ID:-CREATE}"
+    echo \
+        "  Existing /startpipelinelex resource: ${EXISTING_LEX_RESOURCE_ID:-CREATE}"
 
 fi
 
-echo "  Frontend infrastructure: ${DEPLOY_FRONTEND:-false}"
+
+echo \
+    "  Frontend infrastructure: ${DEPLOY_FRONTEND:-false}"
 
 echo "============================================================"
 
@@ -1294,11 +1224,10 @@ if [[ "${CONFIRM_BEFORE_DEPLOY:-true}" == "true" &&
         -p "Continue with this deployment? [y/N] " \
         answer
 
-    [[ "$answer" =~ ^[Yy]$ ]] \
-        || {
-            warn "Deployment cancelled."
-            exit 0
-        }
+    [[ "$answer" =~ ^[Yy]$ ]] || {
+        warn "Deployment cancelled."
+        exit 0
+    }
 
 fi
 
@@ -1313,9 +1242,7 @@ package_lambda() {
     local package_name="$2"
 
     local source_path="$SCRIPT_DIR/$source_dir"
-
     local package_path="$PACKAGE_DIR/$package_name"
-
     local staging_dir="$BUILD_DIR/staging/$package_name"
 
 
@@ -1353,12 +1280,11 @@ package_lambda() {
 
 
     # --------------------------------------------------------
-    # Remove package artifacts that should not be deployed
+    # Remove package artifacts
     # --------------------------------------------------------
 
     rm -rf \
         "$staging_dir/__pycache__"
-
 
     find "$staging_dir" \
         -type d \
@@ -1486,15 +1412,12 @@ success "root.yaml passed CloudFormation validation."
 CFN_PARAMETERS=(
 
     "Environment=$ENVIRONMENT"
-
     "ProjectName=$PROJECT_NAME"
 
     "TemplateBucketName=$DEPLOYMENT_BUCKET"
-
     "TemplateS3Prefix=$TEMPLATE_S3_PREFIX"
 
     "LambdaCodeS3Bucket=$DEPLOYMENT_BUCKET"
-
     "LambdaCodeS3Prefix=lambda-src"
 
     "StorageBucketPrefix=$STORAGE_BUCKET_PREFIX"
@@ -1505,9 +1428,7 @@ CFN_PARAMETERS=(
     # --------------------------------------------------------
 
     "ExistingMigrationBucketName=$EXISTING_MIGRATION_BUCKET_NAME"
-
     "ExistingBackupBucketName=$EXISTING_BACKUP_BUCKET_NAME"
-
     "ExistingArtifactBucketName=$EXISTING_ARTIFACT_BUCKET_NAME"
 
 
@@ -1516,11 +1437,9 @@ CFN_PARAMETERS=(
     # --------------------------------------------------------
 
     "LexUiBucketName=$LEX_UI_BUCKET_NAME"
-
     "LexPublishBucketName=$LEX_PUBLISH_BUCKET_NAME"
 
     "ExistingLexUiBucketName=$EXISTING_LEX_UI_BUCKET_NAME"
-
     "ExistingLexPublishBucketName=$EXISTING_LEX_PUBLISH_BUCKET_NAME"
 
 
@@ -1529,11 +1448,9 @@ CFN_PARAMETERS=(
     # --------------------------------------------------------
 
     "EnvironmentTableName=$ENVIRONMENT_TABLE_NAME"
-
     "AuditTableName=$AUDIT_TRAIL_TABLE_NAME"
 
     "ExistingEnvironmentTableName=$EXISTING_ENVIRONMENT_TABLE_NAME"
-
     "ExistingAuditTableName=$EXISTING_AUDIT_TABLE_NAME"
 
 
@@ -1542,7 +1459,6 @@ CFN_PARAMETERS=(
     # --------------------------------------------------------
 
     "LexAuditTableName=$LEX_AUDIT_TABLE_NAME"
-
     "ExistingLexAuditTableName=$EXISTING_LEX_AUDIT_TABLE_NAME"
 
 
@@ -1551,9 +1467,7 @@ CFN_PARAMETERS=(
     # --------------------------------------------------------
 
     "CodeCommitRepositoryName=$CODECOMMIT_REPOSITORY_NAME"
-
     "CodeCommitBranchName=$CODECOMMIT_BRANCH_NAME"
-
     "ExistingRepositoryName=$EXISTING_REPOSITORY_NAME"
 
 
@@ -1562,9 +1476,7 @@ CFN_PARAMETERS=(
     # --------------------------------------------------------
 
     "LexRepositoryName=$LEX_CODECOMMIT_REPOSITORY_NAME"
-
     "LexRepositoryBranchName=$LEX_CODECOMMIT_BRANCH_NAME"
-
     "ExistingLexRepositoryName=$EXISTING_LEX_REPOSITORY_NAME"
 
 
@@ -1573,15 +1485,11 @@ CFN_PARAMETERS=(
     # --------------------------------------------------------
 
     "UILambdaRoleName=$UI_LAMBDA_ROLE_NAME"
-
     "UpdateLambdaRoleName=$UPDATE_LAMBDA_ROLE_NAME"
-
     "PipelineRoleName=$PIPELINE_ROLE_NAME"
 
     "ExistingUILambdaRoleArn=$EXISTING_UI_LAMBDA_ROLE_ARN"
-
     "ExistingUpdateLambdaRoleArn=$EXISTING_UPDATE_LAMBDA_ROLE_ARN"
-
     "ExistingPipelineRoleArn=$EXISTING_PIPELINE_ROLE_ARN"
 
 
@@ -1590,11 +1498,9 @@ CFN_PARAMETERS=(
     # --------------------------------------------------------
 
     "LexUILambdaRoleName=$LEX_UI_LAMBDA_ROLE_NAME"
-
     "LexPublishLambdaRoleName=$LEX_PUBLISH_LAMBDA_ROLE_NAME"
 
     "ExistingLexUILambdaRoleArn=$EXISTING_LEX_UI_LAMBDA_ROLE_ARN"
-
     "ExistingLexPublishLambdaRoleArn=$EXISTING_LEX_PUBLISH_LAMBDA_ROLE_ARN"
 
     "LexBotImportRoleArn=$LEX_BOT_IMPORT_ROLE_ARN"
@@ -1605,9 +1511,7 @@ CFN_PARAMETERS=(
     # --------------------------------------------------------
 
     "UiGcLambdaName=$UI_GC_LAMBDA_NAME"
-
     "UiGcLambdaMemory=$UI_GC_LAMBDA_MEMORY"
-
     "UiGcLambdaTimeout=$UI_GC_LAMBDA_TIMEOUT"
 
     "ExistingUiGcLambdaArn=$EXISTING_UI_GC_LAMBDA_ARN"
@@ -1649,13 +1553,10 @@ CFN_PARAMETERS=(
     # --------------------------------------------------------
 
     "ApiName=$API_NAME"
-
     "ApiStageName=$API_STAGE_NAME"
 
     "ExistingApiId=$EXISTING_API_ID"
-
     "ExistingApiRootResourceId=$EXISTING_API_ROOT_RESOURCE_ID"
-
     "ExistingLexResourceId=$EXISTING_LEX_RESOURCE_ID"
 
 
@@ -1664,7 +1565,6 @@ CFN_PARAMETERS=(
     # --------------------------------------------------------
 
     "PipelineName=$PIPELINE_NAME"
-
     "ExistingPipelineName=$EXISTING_PIPELINE_NAME"
 
 
@@ -1673,7 +1573,6 @@ CFN_PARAMETERS=(
     # --------------------------------------------------------
 
     "LexPipelineName=$LEX_PIPELINE_NAME"
-
     "ExistingLexPipelineName=$EXISTING_LEX_PIPELINE_NAME"
 
 
@@ -1684,11 +1583,9 @@ CFN_PARAMETERS=(
     "LogRetentionDays=$LOG_RETENTION_DAYS"
 
     "ExistingUIGCLogGroupName=$EXISTING_UI_GC_LOG_GROUP_NAME"
-
     "ExistingUpdateFlowLogGroupName=$EXISTING_UPDATE_FLOW_LOG_GROUP_NAME"
 
     "ExistingLexUILogGroupName=$EXISTING_LEX_UI_LOG_GROUP_NAME"
-
     "ExistingLexPublishLogGroupName=$EXISTING_LEX_PUBLISH_LOG_GROUP_NAME"
 
 
@@ -1721,15 +1618,10 @@ log "Starting CloudFormation deployment..."
 
 
 aws_cmd cloudformation deploy \
-
     --template-file "$ROOT_TEMPLATE_PATH" \
-
     --stack-name "$STACK_NAME" \
-
     --parameter-overrides "${CFN_PARAMETERS[@]}" \
-
     --capabilities "$CFN_CAPABILITIES" \
-
     --no-fail-on-empty-changeset
 
 
@@ -1754,20 +1646,25 @@ if [[ "${WAIT_FOR_STACK:-true}" == "true" ]]; then
 
     case "$STACK_STATUS" in
 
-        CREATE_COMPLETE|
-        UPDATE_COMPLETE|
-        UPDATE_ROLLBACK_COMPLETE|
-        IMPORT_COMPLETE)
+        CREATE_COMPLETE|UPDATE_COMPLETE|IMPORT_COMPLETE)
 
             success \
                 "CloudFormation stack status: $STACK_STATUS"
 
             ;;
 
+        CREATE_IN_PROGRESS|UPDATE_IN_PROGRESS|UPDATE_COMPLETE_CLEANUP_IN_PROGRESS)
+
+            log \
+                "CloudFormation stack is still transitioning: $STACK_STATUS"
+
+            ;;
+
         *)
 
             if [[ "$STACK_STATUS" == *"_FAILED" ||
-                  "$STACK_STATUS" == *"ROLLBACK"* ]]; then
+                  "$STACK_STATUS" == *"ROLLBACK"* ||
+                  "$STACK_STATUS" == "UPDATE_ROLLBACK_COMPLETE" ]]; then
 
                 die \
                     "CloudFormation stack ended in failure state: $STACK_STATUS"
@@ -1810,8 +1707,6 @@ build_merged_environment_json() {
     shift
 
     local updates=("$@")
-
-
     local existing_json
 
 
@@ -1830,6 +1725,7 @@ build_merged_environment_json() {
 
 
     python3 - "$existing_json" "${updates[@]}" <<'PY'
+
 import json
 import sys
 
@@ -1843,7 +1739,13 @@ for item in sys.argv[2:]:
 
     existing[key] = value
 
-print(json.dumps({"Variables": existing}, separators=(",", ":")))
+print(
+    json.dumps(
+        {"Variables": existing},
+        separators=(",", ":")
+    )
+)
+
 PY
 
 }
@@ -1856,9 +1758,7 @@ PY
 update_reused_lambda_if_present() {
 
     local function_name="$1"
-
     local package_s3_key="$2"
-
     local description="$3"
 
     shift 3
@@ -1928,32 +1828,20 @@ update_reused_lambda_if_present() {
 if [[ -n "${EXISTING_UI_GC_LAMBDA_ARN:-}" ]]; then
 
     MIGRATION_BUCKET_NAME="$(get_stack_output MigrationBucketName)"
-
     BACKUP_BUCKET_NAME="$(get_stack_output BackupBucketName)"
-
     ENVT_TABLE="$(get_stack_output EnvironmentTableName)"
-
     AUDIT_TABLE="$(get_stack_output AuditTrailTableName)"
 
 
     update_reused_lambda_if_present \
-
         "$EXISTING_UI_GC_LAMBDA_ARN" \
-
         "$UI_GC_S3_KEY" \
-
         "UI-GC" \
-
         "UI_GC_BUCKET_NAME=$MIGRATION_BUCKET_NAME" \
-
         "DATA_BKP_BUCKET_NAME=$BACKUP_BUCKET_NAME" \
-
         "ENVT_TABLE_NAME=$ENVT_TABLE" \
-
         "AUDIT_TABLE_NAME=$AUDIT_TABLE" \
-
         "CODECOMMIT_REPO_NAME=$CODECOMMIT_REPOSITORY_NAME" \
-
         "CODECOMMIT_BRANCH_NAME=$CODECOMMIT_BRANCH_NAME"
 
 fi
@@ -1962,22 +1850,15 @@ fi
 if [[ -n "${EXISTING_UPDATE_CONTACT_FLOW_LAMBDA_ARN:-}" ]]; then
 
     BACKUP_BUCKET_NAME="$(get_stack_output BackupBucketName)"
-
     AUDIT_TABLE="$(get_stack_output AuditTrailTableName)"
 
 
     update_reused_lambda_if_present \
-
         "$EXISTING_UPDATE_CONTACT_FLOW_LAMBDA_ARN" \
-
         "$UPDATE_CONTACT_FLOW_S3_KEY" \
-
         "UpdateContactFlow" \
-
         "AUDIT_TABLE_NAME=$AUDIT_TABLE" \
-
         "CODECOMMIT_REPO_NAME=$CODECOMMIT_REPOSITORY_NAME" \
-
         "DATA_BKP_BUCKET_NAME=$BACKUP_BUCKET_NAME"
 
 fi
@@ -1990,24 +1871,16 @@ fi
 if [[ -n "${EXISTING_LEX_UI_LAMBDA_ARN:-}" ]]; then
 
     LEX_UI_BUCKET="$(get_stack_output LexUiBucketName)"
-
     LEX_AUDIT_TABLE="$(get_stack_output LexAuditTableName)"
 
 
     update_reused_lambda_if_present \
-
         "$EXISTING_LEX_UI_LAMBDA_ARN" \
-
         "$LEX_UI_S3_KEY" \
-
         "Lex-UI" \
-
         "LEX_UI_BUCKET_NAME=$LEX_UI_BUCKET" \
-
         "CODECOMMIT_REPO_NAME=$LEX_CODECOMMIT_REPOSITORY_NAME" \
-
         "CODECOMMIT_BRANCH_NAME=$LEX_CODECOMMIT_BRANCH_NAME" \
-
         "LEX_AUDIT_TABLE_NAME=$LEX_AUDIT_TABLE"
 
 fi
@@ -2016,24 +1889,16 @@ fi
 if [[ -n "${EXISTING_LEX_PUBLISH_LAMBDA_ARN:-}" ]]; then
 
     LEX_PUBLISH_BUCKET="$(get_stack_output LexPublishBucketName)"
-
     LEX_AUDIT_TABLE="$(get_stack_output LexAuditTableName)"
 
 
     update_reused_lambda_if_present \
-
         "$EXISTING_LEX_PUBLISH_LAMBDA_ARN" \
-
         "$LEX_PUBLISH_S3_KEY" \
-
         "Lex-Publish" \
-
         "CODECOMMIT_REPO_NAME=$LEX_CODECOMMIT_REPOSITORY_NAME" \
-
         "CODECOMMIT_BRANCH_NAME=$LEX_CODECOMMIT_BRANCH_NAME" \
-
         "SOURCE_S3_BUCKET_NAME=$LEX_PUBLISH_BUCKET" \
-
         "LEX_AUDIT_TABLE_NAME=$LEX_AUDIT_TABLE"
 
 fi
@@ -2043,12 +1908,12 @@ fi
 # EXISTING API GATEWAY DEPLOYMENT
 # ============================================================
 #
-# If the API already existed before this CloudFormation stack,
-# the API resource/method can be updated by the stack but the
-# stage still needs a new deployment.
+# If the API already existed before the CloudFormation stack,
+# the route/method can be updated by the stack but the stage
+# needs a new deployment.
 #
-# If the API was created by the stack, its API deployment is
-# handled by 07-api.yaml.
+# If the API was created by the stack, 07-api.yaml manages its
+# deployment.
 # ============================================================
 
 if [[ -n "${EXISTING_API_ID:-}" ]]; then
@@ -2058,14 +1923,10 @@ if [[ -n "${EXISTING_API_ID:-}" ]]; then
 
 
     aws_cmd apigateway create-deployment \
-
         --rest-api-id "$EXISTING_API_ID" \
-
         --stage-name "$API_STAGE_NAME" \
-
         --description \
             "Deployment created by $STACK_NAME at $(date '+%Y-%m-%d %H:%M:%S')" \
-
         >/dev/null
 
 
@@ -2089,12 +1950,9 @@ if [[ "${PRINT_STACK_OUTPUTS:-true}" == "true" ]]; then
 
 
     aws_cmd cloudformation describe-stacks \
-
         --stack-name "$STACK_NAME" \
-
         --query \
             "Stacks[0].Outputs[].{Key:OutputKey,Value:OutputValue,Description:Description}" \
-
         --output table
 
 
