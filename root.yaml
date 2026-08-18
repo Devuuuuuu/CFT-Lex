@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 
 Description: >
-  DevOps Connect - IVR Migration root stack.
+  DevOps Connect - IVR & Lex Migration root stack.
   Orchestrates all nested stacks in dependency order and wires
   outputs from upstream stacks into downstream stacks.
 
@@ -70,19 +70,54 @@ Parameters:
     Default: ''
 
   # ---------------------------------------------------------------------------
+  # Storage - Lex
+  # ---------------------------------------------------------------------------
+
+  LexUiBucketName:
+    Type: String
+    Default: devops-lex-ui-files
+    Description: Name of the temporary S3 bucket used by Devops-Lex-UI.
+
+  LexPublishBucketName:
+    Type: String
+    Default: devops-lex-scm-bkp-s3
+    Description: Name of the S3 bucket used by Lex publish during promotion.
+
+  ExistingLexUiBucketName:
+    Type: String
+    Default: ''
+  ExistingLexPublishBucketName:
+    Type: String
+    Default: ''
+
+  # ---------------------------------------------------------------------------
   # DynamoDB
   # ---------------------------------------------------------------------------
 
   EnvironmentTableName:
     Type: String
+    Default: DevOps-Envt-Table
 
   AuditTableName:
     Type: String
+    Default: Devops-Connect-AuditTrail
 
   ExistingEnvironmentTableName:
     Type: String
     Default: ''
   ExistingAuditTableName:
+    Type: String
+    Default: ''
+
+  # ---------------------------------------------------------------------------
+  # DynamoDB - Lex
+  # ---------------------------------------------------------------------------
+
+  LexAuditTableName:
+    Type: String
+    Default: Devops-Lex-AuditTrail
+
+  ExistingLexAuditTableName:
     Type: String
     Default: ''
 
@@ -103,17 +138,36 @@ Parameters:
     Default: ''
 
   # ---------------------------------------------------------------------------
+  # Source control - Lex
+  # ---------------------------------------------------------------------------
+
+  LexRepositoryName:
+    Type: String
+    Default: Devops-Lex-SCM-BKP
+
+  LexRepositoryBranchName:
+    Type: String
+    Default: master
+
+  ExistingLexRepositoryName:
+    Type: String
+    Default: ''
+
+  # ---------------------------------------------------------------------------
   # IAM role names
   # ---------------------------------------------------------------------------
 
   UILambdaRoleName:
     Type: String
+    Default: DevOps-UI-GC-Lambda-Role
 
   UpdateLambdaRoleName:
     Type: String
+    Default: DevOps-UpdateContactFlow-Lambda-Role
 
   PipelineRoleName:
     Type: String
+    Default: DevOps-CodePipeline-Role
 
   ExistingUILambdaRoleArn:
     Type: String
@@ -126,17 +180,46 @@ Parameters:
     Default: ''
 
   # ---------------------------------------------------------------------------
+  # IAM role names - Lex
+  # ---------------------------------------------------------------------------
+
+  LexUILambdaRoleName:
+    Type: String
+    Default: DevOps-Lex-UI-Lambda-Role
+
+  LexPublishLambdaRoleName:
+    Type: String
+    Default: DevOps-Lex-Publish-Lambda-Role
+
+  ExistingLexUILambdaRoleArn:
+    Type: String
+    Default: ''
+  ExistingLexPublishLambdaRoleArn:
+    Type: String
+    Default: ''
+
+  LexBotImportRoleArn:
+    Type: String
+    Default: ''
+    Description: >
+      IAM role ARN used by Lex full-bot import. Leave empty if not using
+      full-bot import path.
+
+  # ---------------------------------------------------------------------------
   # UI-GC Lambda
   # ---------------------------------------------------------------------------
 
   UiGcLambdaName:
     Type: String
+    Default: Devops-Connect-UI-GC
 
   UiGcLambdaMemory:
     Type: Number
+    Default: 128
 
   UiGcLambdaTimeout:
     Type: Number
+    Default: 900
 
   ExistingUiGcLambdaArn:
     Type: String
@@ -148,14 +231,41 @@ Parameters:
 
   UpdateContactFlowLambdaName:
     Type: String
+    Default: Devops-Connect-UpdateContactFlowJson-BKP
 
   UpdateContactFlowLambdaMemory:
     Type: Number
+    Default: 128
 
   UpdateContactFlowLambdaTimeout:
     Type: Number
+    Default: 300
 
   ExistingUpdateContactFlowLambdaArn:
+    Type: String
+    Default: ''
+
+  # ---------------------------------------------------------------------------
+  # Lex UI Lambda
+  # ---------------------------------------------------------------------------
+
+  LexUILambdaName:
+    Type: String
+    Default: Devops-Lex-UI
+
+  ExistingLexUILambdaArn:
+    Type: String
+    Default: ''
+
+  # ---------------------------------------------------------------------------
+  # Lex Publish Lambda
+  # ---------------------------------------------------------------------------
+
+  LexPublishLambdaName:
+    Type: String
+    Default: Devops-Lex-PublishLexZip-BKP
+
+  ExistingLexPublishLambdaArn:
     Type: String
     Default: ''
 
@@ -165,13 +275,29 @@ Parameters:
 
   ApiName:
     Type: String
+    Default: DevopsConnect
 
   ApiStageName:
     Type: String
+    Default: dev
 
   ExistingApiId:
     Type: String
     Default: ''
+
+  ExistingApiRootResourceId:
+    Type: String
+    Default: ''
+    Description: >
+      Existing API Gateway root resource ID. Required when reusing an
+      existing API and creating the Lex route.
+
+  ExistingLexResourceId:
+    Type: String
+    Default: ''
+    Description: >
+      Existing /startpipelinelex resource ID. If supplied, the Lex route
+      is reused.
 
   # ---------------------------------------------------------------------------
   # Pipeline
@@ -179,8 +305,21 @@ Parameters:
 
   PipelineName:
     Type: String
+    Default: Devops-Connect-Pipeline-BKP
 
   ExistingPipelineName:
+    Type: String
+    Default: ''
+
+  # ---------------------------------------------------------------------------
+  # Pipeline - Lex
+  # ---------------------------------------------------------------------------
+
+  LexPipelineName:
+    Type: String
+    Default: Devops-Lex-Pipeline-BKP
+
+  ExistingLexPipelineName:
     Type: String
     Default: ''
 
@@ -190,11 +329,18 @@ Parameters:
 
   LogRetentionDays:
     Type: Number
+    Default: 30
 
   ExistingUIGCLogGroupName:
     Type: String
     Default: ''
   ExistingUpdateFlowLogGroupName:
+    Type: String
+    Default: ''
+  ExistingLexUILogGroupName:
+    Type: String
+    Default: ''
+  ExistingLexPublishLogGroupName:
     Type: String
     Default: ''
 
@@ -273,11 +419,14 @@ Resources:
         ExistingMigrationBucketName: !Ref ExistingMigrationBucketName
         ExistingBackupBucketName: !Ref ExistingBackupBucketName
         ExistingArtifactBucketName: !Ref ExistingArtifactBucketName
+        LexUiBucketName: !Ref LexUiBucketName
+        LexPublishBucketName: !Ref LexPublishBucketName
+        ExistingLexUiBucketName: !Ref ExistingLexUiBucketName
+        ExistingLexPublishBucketName: !Ref ExistingLexPublishBucketName
 
       Tags:
         - Key: Project
           Value: !Ref ProjectName
-
         - Key: Environment
           Value: !Ref Environment
 
@@ -301,11 +450,12 @@ Resources:
         AuditTableName: !Ref AuditTableName
         ExistingEnvironmentTableName: !Ref ExistingEnvironmentTableName
         ExistingAuditTableName: !Ref ExistingAuditTableName
+        LexAuditTableName: !Ref LexAuditTableName
+        ExistingLexAuditTableName: !Ref ExistingLexAuditTableName
 
       Tags:
         - Key: Project
           Value: !Ref ProjectName
-
         - Key: Environment
           Value: !Ref Environment
 
@@ -327,11 +477,13 @@ Resources:
       Parameters:
         RepositoryName: !Ref CodeCommitRepositoryName
         ExistingRepositoryName: !Ref ExistingRepositoryName
+        LexRepositoryName: !Ref LexRepositoryName
+        ExistingLexRepositoryName: !Ref ExistingLexRepositoryName
+        LexRepositoryBranchName: !Ref LexRepositoryBranchName
 
       Tags:
         - Key: Project
           Value: !Ref ProjectName
-
         - Key: Environment
           Value: !Ref Environment
 
@@ -357,11 +509,15 @@ Resources:
         ExistingUILambdaRoleArn: !Ref ExistingUILambdaRoleArn
         ExistingUpdateLambdaRoleArn: !Ref ExistingUpdateLambdaRoleArn
         ExistingPipelineRoleArn: !Ref ExistingPipelineRoleArn
+        LexUILambdaRoleName: !Ref LexUILambdaRoleName
+        LexPublishLambdaRoleName: !Ref LexPublishLambdaRoleName
+        ExistingLexUILambdaRoleArn: !Ref ExistingLexUILambdaRoleArn
+        ExistingLexPublishLambdaRoleArn: !Ref ExistingLexPublishLambdaRoleArn
+        LexBotImportRoleArn: !Ref LexBotImportRoleArn
 
       Tags:
         - Key: Project
           Value: !Ref ProjectName
-
         - Key: Environment
           Value: !Ref Environment
 
@@ -430,7 +586,6 @@ Resources:
       Tags:
         - Key: Project
           Value: !Ref ProjectName
-
         - Key: Environment
           Value: !Ref Environment
 
@@ -490,7 +645,6 @@ Resources:
       Tags:
         - Key: Project
           Value: !Ref ProjectName
-
         - Key: Environment
           Value: !Ref Environment
 
@@ -504,6 +658,7 @@ Resources:
 
     DependsOn:
       - LambdaUiGcStack
+      - LexLambdaUIStack
 
     Properties:
 
@@ -526,13 +681,24 @@ Resources:
         UILambdaName:
           !GetAtt LambdaUiGcStack.Outputs.FunctionName
 
+        LexUILambdaArn:
+          !GetAtt LexLambdaUIStack.Outputs.LexUILambdaArn
+
+        LexUILambdaName:
+          !GetAtt LexLambdaUIStack.Outputs.LexUILambdaName
+
         ExistingApiId:
           !Ref ExistingApiId
+
+        ExistingApiRootResourceId:
+          !Ref ExistingApiRootResourceId
+
+        ExistingLexResourceId:
+          !Ref ExistingLexResourceId
 
       Tags:
         - Key: Project
           Value: !Ref ProjectName
-
         - Key: Environment
           Value: !Ref Environment
 
@@ -549,6 +715,7 @@ Resources:
       - SourceControlStack
       - IAMStack
       - LambdaUpdateContactFlowStack
+      - LexLambdaPublishStack
 
     Properties:
 
@@ -559,6 +726,13 @@ Resources:
 
       Parameters:
 
+        ArtifactBucketName:
+          !GetAtt StorageStack.Outputs.ArtifactBucketName
+
+        PipelineRoleArn:
+          !GetAtt IAMStack.Outputs.PipelineRoleArn
+
+        # IVR pipeline
         PipelineName:
           !Ref PipelineName
 
@@ -568,22 +742,34 @@ Resources:
         RepositoryBranch:
           !Ref CodeCommitBranchName
 
-        ArtifactBucketName:
-          !GetAtt StorageStack.Outputs.ArtifactBucketName
-
-        PipelineRoleArn:
-          !GetAtt IAMStack.Outputs.PipelineRoleArn
-
         UpdateLambdaFunctionName:
           !GetAtt LambdaUpdateContactFlowStack.Outputs.FunctionName
 
         ExistingPipelineName:
           !Ref ExistingPipelineName
 
+        # Lex pipeline
+        LexPipelineName:
+          !Ref LexPipelineName
+
+        LexRepositoryName:
+          !GetAtt SourceControlStack.Outputs.LexRepositoryName
+
+        LexRepositoryBranch:
+          !GetAtt SourceControlStack.Outputs.LexRepositoryBranchName
+
+        LexPublishBucketName:
+          !GetAtt StorageStack.Outputs.LexPublishBucketName
+
+        LexPublishLambdaFunctionName:
+          !GetAtt LexLambdaPublishStack.Outputs.LexPublishLambdaName
+
+        ExistingLexPipelineName:
+          !Ref ExistingLexPipelineName
+
       Tags:
         - Key: Project
           Value: !Ref ProjectName
-
         - Key: Environment
           Value: !Ref Environment
 
@@ -598,6 +784,8 @@ Resources:
     DependsOn:
       - LambdaUiGcStack
       - LambdaUpdateContactFlowStack
+      - LexLambdaUIStack
+      - LexLambdaPublishStack
 
     Properties:
 
@@ -614,6 +802,12 @@ Resources:
         UpdateFlowFunctionName:
           !GetAtt LambdaUpdateContactFlowStack.Outputs.FunctionName
 
+        LexUIFunctionName:
+          !GetAtt LexLambdaUIStack.Outputs.LexUILambdaName
+
+        LexPublishFunctionName:
+          !GetAtt LexLambdaPublishStack.Outputs.LexPublishLambdaName
+
         LogRetentionDays:
           !Ref LogRetentionDays
 
@@ -623,10 +817,15 @@ Resources:
         ExistingUpdateFlowLogGroupName:
           !Ref ExistingUpdateFlowLogGroupName
 
+        ExistingLexUILogGroupName:
+          !Ref ExistingLexUILogGroupName
+
+        ExistingLexPublishLogGroupName:
+          !Ref ExistingLexPublishLogGroupName
+
       Tags:
         - Key: Project
           Value: !Ref ProjectName
-
         - Key: Environment
           Value: !Ref Environment
 
@@ -670,7 +869,118 @@ Resources:
       Tags:
         - Key: Project
           Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
 
+
+  # ===========================================================================
+  # 11 - LEX UI LAMBDA
+  # ===========================================================================
+
+  LexLambdaUIStack:
+    Type: AWS::CloudFormation::Stack
+
+    DependsOn:
+      - StorageStack
+      - DataStack
+      - SourceControlStack
+      - IAMStack
+
+    Properties:
+
+      TemplateURL: !Sub
+        - "https://${Bucket}.s3.${AWS::Region}.amazonaws.com/${Prefix}/11-lex-lambda-ui.yaml"
+        - Bucket: !Ref TemplateBucketName
+          Prefix: !Ref TemplateS3Prefix
+
+      Parameters:
+
+        ExistingLexUILambdaArn:
+          !Ref ExistingLexUILambdaArn
+
+        LambdaFunctionName:
+          !Ref LexUILambdaName
+
+        ExecutionRoleArn:
+          !GetAtt IAMStack.Outputs.LexUILambdaRoleArn
+
+        CodeS3Bucket:
+          !Ref LambdaCodeS3Bucket
+
+        CodeS3Key:
+          !Sub "${LambdaCodeS3Prefix}/lex-ui.zip"
+
+        LexUiBucketName:
+          !GetAtt StorageStack.Outputs.LexUiBucketName
+
+        CodeCommitRepositoryName:
+          !GetAtt SourceControlStack.Outputs.LexRepositoryName
+
+        CodeCommitBranchName:
+          !GetAtt SourceControlStack.Outputs.LexRepositoryBranchName
+
+        LexAuditTableName:
+          !GetAtt DataStack.Outputs.LexAuditTableName
+
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+
+  # ===========================================================================
+  # 12 - LEX PUBLISH LAMBDA
+  # ===========================================================================
+
+  LexLambdaPublishStack:
+    Type: AWS::CloudFormation::Stack
+
+    DependsOn:
+      - StorageStack
+      - DataStack
+      - SourceControlStack
+      - IAMStack
+
+    Properties:
+
+      TemplateURL: !Sub
+        - "https://${Bucket}.s3.${AWS::Region}.amazonaws.com/${Prefix}/12-lex-lambda-publish.yaml"
+        - Bucket: !Ref TemplateBucketName
+          Prefix: !Ref TemplateS3Prefix
+
+      Parameters:
+
+        ExistingLexPublishLambdaArn:
+          !Ref ExistingLexPublishLambdaArn
+
+        LambdaFunctionName:
+          !Ref LexPublishLambdaName
+
+        ExecutionRoleArn:
+          !GetAtt IAMStack.Outputs.LexPublishLambdaRoleArn
+
+        CodeS3Bucket:
+          !Ref LambdaCodeS3Bucket
+
+        CodeS3Key:
+          !Sub "${LambdaCodeS3Prefix}/lex-publish.zip"
+
+        SourceS3BucketName:
+          !GetAtt StorageStack.Outputs.LexPublishBucketName
+
+        CodeCommitRepositoryName:
+          !GetAtt SourceControlStack.Outputs.LexRepositoryName
+
+        CodeCommitBranchName:
+          !GetAtt SourceControlStack.Outputs.LexRepositoryBranchName
+
+        LexAuditTableName:
+          !GetAtt DataStack.Outputs.LexAuditTableName
+
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
         - Key: Environment
           Value: !Ref Environment
 
@@ -680,6 +990,10 @@ Resources:
 # =============================================================================
 
 Outputs:
+
+  # ---------------------------------------------------------------------------
+  # Storage
+  # ---------------------------------------------------------------------------
 
   MigrationBucketName:
     Description: Migration S3 bucket.
@@ -693,6 +1007,18 @@ Outputs:
     Description: CodePipeline artifact S3 bucket.
     Value: !GetAtt StorageStack.Outputs.ArtifactBucketName
 
+  LexUiBucketName:
+    Description: Temporary Lex UI S3 bucket.
+    Value: !GetAtt StorageStack.Outputs.LexUiBucketName
+
+  LexPublishBucketName:
+    Description: Lex publish/source S3 bucket.
+    Value: !GetAtt StorageStack.Outputs.LexPublishBucketName
+
+  # ---------------------------------------------------------------------------
+  # Data
+  # ---------------------------------------------------------------------------
+
   EnvironmentTableName:
     Description: Environment DynamoDB table.
     Value: !GetAtt DataStack.Outputs.EnvironmentTableName
@@ -701,9 +1027,25 @@ Outputs:
     Description: Audit trail DynamoDB table.
     Value: !GetAtt DataStack.Outputs.AuditTrailTableName
 
+  LexAuditTableName:
+    Description: Lex audit trail DynamoDB table.
+    Value: !GetAtt DataStack.Outputs.LexAuditTableName
+
+  # ---------------------------------------------------------------------------
+  # Source control
+  # ---------------------------------------------------------------------------
+
   CodeCommitRepoCloneUrlHttp:
-    Description: CodeCommit HTTPS clone URL.
+    Description: IVR CodeCommit HTTPS clone URL.
     Value: !GetAtt SourceControlStack.Outputs.CloneUrlHttp
+
+  LexRepoCloneUrlHttp:
+    Description: Lex CodeCommit HTTPS clone URL.
+    Value: !GetAtt SourceControlStack.Outputs.LexCloneUrlHttp
+
+  # ---------------------------------------------------------------------------
+  # IVR Lambdas
+  # ---------------------------------------------------------------------------
 
   UiGcLambdaArn:
     Description: UI-GC Lambda ARN.
@@ -713,13 +1055,49 @@ Outputs:
     Description: Update Contact Flow Lambda ARN.
     Value: !GetAtt LambdaUpdateContactFlowStack.Outputs.FunctionArn
 
+  # ---------------------------------------------------------------------------
+  # Lex Lambdas
+  # ---------------------------------------------------------------------------
+
+  LexUILambdaArn:
+    Description: Devops-Lex-UI Lambda ARN.
+    Value: !GetAtt LexLambdaUIStack.Outputs.LexUILambdaArn
+
+  LexPublishLambdaArn:
+    Description: Devops-Lex-PublishLexZip Lambda ARN.
+    Value: !GetAtt LexLambdaPublishStack.Outputs.LexPublishLambdaArn
+
+  # ---------------------------------------------------------------------------
+  # API Gateway
+  # ---------------------------------------------------------------------------
+
   ApiInvokeUrl:
-    Description: API Gateway invoke URL.
+    Description: API Gateway invoke URL for IVR.
     Value: !GetAtt ApiStack.Outputs.InvokeUrl
 
+  LexApiInvokeUrl:
+    Description: API Gateway invoke URL for Lex.
+    Value: !GetAtt ApiStack.Outputs.LexApiInvokeUrl
+
+  ApiId:
+    Description: Shared API Gateway ID.
+    Value: !GetAtt ApiStack.Outputs.ApiId
+
+  # ---------------------------------------------------------------------------
+  # Pipelines
+  # ---------------------------------------------------------------------------
+
   PipelineName:
-    Description: CodePipeline name.
+    Description: IVR CodePipeline name.
     Value: !GetAtt PipelineStack.Outputs.PipelineName
+
+  LexPipelineName:
+    Description: Lex CodePipeline name.
+    Value: !GetAtt PipelineStack.Outputs.LexPipelineName
+
+  # ---------------------------------------------------------------------------
+  # Frontend
+  # ---------------------------------------------------------------------------
 
   CloudFrontDomainName:
     Condition: DeployFrontend
