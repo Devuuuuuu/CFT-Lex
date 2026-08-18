@@ -1106,3 +1106,4 @@ Outputs:
       - CreateFrontendHosting
       - !GetAtt FrontendHostingStack.Outputs.CloudFrontDomainName
       - !Ref ExistingCloudFrontDomainName
+      
