@@ -1,0 +1,1111 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  DevOps Connect - IVR & Lex Migration root stack.
+  Orchestrates all nested stacks in dependency order and wires
+  outputs from upstream stacks into downstream stacks.
+
+# =============================================================================
+# PARAMETERS
+# =============================================================================
+
+Parameters:
+
+  # ---------------------------------------------------------------------------
+  # Application
+  # ---------------------------------------------------------------------------
+
+  Environment:
+    Type: String
+    Default: dev
+    Description: Deployment environment.
+
+  ProjectName:
+    Type: String
+    Default: ivr-migration
+    Description: Project identifier.
+
+  # ---------------------------------------------------------------------------
+  # Nested template location
+  # ---------------------------------------------------------------------------
+
+  TemplateBucketName:
+    Type: String
+    Description: S3 bucket containing nested CloudFormation templates.
+
+  TemplateS3Prefix:
+    Type: String
+    Default: cloudformation
+    Description: S3 prefix containing nested CloudFormation templates.
+
+  # ---------------------------------------------------------------------------
+  # Lambda code location
+  # ---------------------------------------------------------------------------
+
+  LambdaCodeS3Bucket:
+    Type: String
+    Description: S3 bucket containing Lambda deployment packages.
+
+  LambdaCodeS3Prefix:
+    Type: String
+    Default: lambda-src
+    Description: S3 prefix containing Lambda packages.
+
+  # ---------------------------------------------------------------------------
+  # Storage
+  # ---------------------------------------------------------------------------
+
+  StorageBucketPrefix:
+    Type: String
+    Description: Prefix used by 01-storage.yaml for all application buckets.
+
+  ExistingMigrationBucketName:
+    Type: String
+    Default: ''
+  ExistingBackupBucketName:
+    Type: String
+    Default: ''
+  ExistingArtifactBucketName:
+    Type: String
+    Default: ''
+
+  # ---------------------------------------------------------------------------
+  # Storage - Lex
+  # ---------------------------------------------------------------------------
+
+  LexUiBucketName:
+    Type: String
+    Default: devops-lex-ui-files
+    Description: Name of the temporary S3 bucket used by Devops-Lex-UI.
+
+  LexPublishBucketName:
+    Type: String
+    Default: devops-lex-scm-bkp-s3
+    Description: Name of the S3 bucket used by Lex publish during promotion.
+
+  ExistingLexUiBucketName:
+    Type: String
+    Default: ''
+  ExistingLexPublishBucketName:
+    Type: String
+    Default: ''
+
+  # ---------------------------------------------------------------------------
+  # DynamoDB
+  # ---------------------------------------------------------------------------
+
+  EnvironmentTableName:
+    Type: String
+    Default: DevOps-Envt-Table
+
+  AuditTableName:
+    Type: String
+    Default: Devops-Connect-AuditTrail
+
+  ExistingEnvironmentTableName:
+    Type: String
+    Default: ''
+  ExistingAuditTableName:
+    Type: String
+    Default: ''
+
+  # ---------------------------------------------------------------------------
+  # DynamoDB - Lex
+  # ---------------------------------------------------------------------------
+
+  LexAuditTableName:
+    Type: String
+    Default: Devops-Lex-AuditTrail
+
+  ExistingLexAuditTableName:
+    Type: String
+    Default: ''
+
+  # ---------------------------------------------------------------------------
+  # Source control
+  # ---------------------------------------------------------------------------
+
+  CodeCommitRepositoryName:
+    Type: String
+    Default: Devops-Connect-Migration
+
+  CodeCommitBranchName:
+    Type: String
+    Default: main
+
+  ExistingRepositoryName:
+    Type: String
+    Default: ''
+
+  # ---------------------------------------------------------------------------
+  # Source control - Lex
+  # ---------------------------------------------------------------------------
+
+  LexRepositoryName:
+    Type: String
+    Default: Devops-Lex-SCM-BKP
+
+  LexRepositoryBranchName:
+    Type: String
+    Default: master
+
+  ExistingLexRepositoryName:
+    Type: String
+    Default: ''
+
+  # ---------------------------------------------------------------------------
+  # IAM role names
+  # ---------------------------------------------------------------------------
+
+  UILambdaRoleName:
+    Type: String
+    Default: DevOps-UI-GC-Lambda-Role
+
+  UpdateLambdaRoleName:
+    Type: String
+    Default: DevOps-UpdateContactFlow-Lambda-Role
+
+  PipelineRoleName:
+    Type: String
+    Default: DevOps-CodePipeline-Role
+
+  ExistingUILambdaRoleArn:
+    Type: String
+    Default: ''
+  ExistingUpdateLambdaRoleArn:
+    Type: String
+    Default: ''
+  ExistingPipelineRoleArn:
+    Type: String
+    Default: ''
+
+  # ---------------------------------------------------------------------------
+  # IAM role names - Lex
+  # ---------------------------------------------------------------------------
+
+  LexUILambdaRoleName:
+    Type: String
+    Default: DevOps-Lex-UI-Lambda-Role
+
+  LexPublishLambdaRoleName:
+    Type: String
+    Default: DevOps-Lex-Publish-Lambda-Role
+
+  ExistingLexUILambdaRoleArn:
+    Type: String
+    Default: ''
+  ExistingLexPublishLambdaRoleArn:
+    Type: String
+    Default: ''
+
+  LexBotImportRoleArn:
+    Type: String
+    Default: ''
+    Description: >
+      IAM role ARN used by Lex full-bot import. Leave empty if not using
+      full-bot import path.
+
+  # ---------------------------------------------------------------------------
+  # UI-GC Lambda
+  # ---------------------------------------------------------------------------
+
+  UiGcLambdaName:
+    Type: String
+    Default: Devops-Connect-UI-GC
+
+  UiGcLambdaMemory:
+    Type: Number
+    Default: 128
+
+  UiGcLambdaTimeout:
+    Type: Number
+    Default: 900
+
+  ExistingUiGcLambdaArn:
+    Type: String
+    Default: ''
+
+  # ---------------------------------------------------------------------------
+  # Update Contact Flow Lambda
+  # ---------------------------------------------------------------------------
+
+  UpdateContactFlowLambdaName:
+    Type: String
+    Default: Devops-Connect-UpdateContactFlowJson-BKP
+
+  UpdateContactFlowLambdaMemory:
+    Type: Number
+    Default: 128
+
+  UpdateContactFlowLambdaTimeout:
+    Type: Number
+    Default: 300
+
+  ExistingUpdateContactFlowLambdaArn:
+    Type: String
+    Default: ''
+
+  # ---------------------------------------------------------------------------
+  # Lex UI Lambda
+  # ---------------------------------------------------------------------------
+
+  LexUILambdaName:
+    Type: String
+    Default: Devops-Lex-UI
+
+  ExistingLexUILambdaArn:
+    Type: String
+    Default: ''
+
+  # ---------------------------------------------------------------------------
+  # Lex Publish Lambda
+  # ---------------------------------------------------------------------------
+
+  LexPublishLambdaName:
+    Type: String
+    Default: Devops-Lex-PublishLexZip-BKP
+
+  ExistingLexPublishLambdaArn:
+    Type: String
+    Default: ''
+
+  # ---------------------------------------------------------------------------
+  # API Gateway
+  # ---------------------------------------------------------------------------
+
+  ApiName:
+    Type: String
+    Default: DevopsConnect
+
+  ApiStageName:
+    Type: String
+    Default: dev
+
+  ExistingApiId:
+    Type: String
+    Default: ''
+
+  ExistingApiRootResourceId:
+    Type: String
+    Default: ''
+    Description: >
+      Existing API Gateway root resource ID. Required when reusing an
+      existing API and creating the Lex route.
+
+  ExistingLexResourceId:
+    Type: String
+    Default: ''
+    Description: >
+      Existing /startpipelinelex resource ID. If supplied, the Lex route
+      is reused.
+
+  # ---------------------------------------------------------------------------
+  # Pipeline
+  # ---------------------------------------------------------------------------
+
+  PipelineName:
+    Type: String
+    Default: Devops-Connect-Pipeline-BKP
+
+  ExistingPipelineName:
+    Type: String
+    Default: ''
+
+  # ---------------------------------------------------------------------------
+  # Pipeline - Lex
+  # ---------------------------------------------------------------------------
+
+  LexPipelineName:
+    Type: String
+    Default: Devops-Lex-Pipeline-BKP
+
+  ExistingLexPipelineName:
+    Type: String
+    Default: ''
+
+  # ---------------------------------------------------------------------------
+  # Observability
+  # ---------------------------------------------------------------------------
+
+  LogRetentionDays:
+    Type: Number
+    Default: 30
+
+  ExistingUIGCLogGroupName:
+    Type: String
+    Default: ''
+  ExistingUpdateFlowLogGroupName:
+    Type: String
+    Default: ''
+  ExistingLexUILogGroupName:
+    Type: String
+    Default: ''
+  ExistingLexPublishLogGroupName:
+    Type: String
+    Default: ''
+
+  # ---------------------------------------------------------------------------
+  # Frontend
+  # ---------------------------------------------------------------------------
+
+  DeployFrontendInfrastructure:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  FrontendBucketPrefix:
+    Type: String
+    Default: devops-connect-frontend
+
+  FrontendDefaultRootObject:
+    Type: String
+    Default: index.html
+
+  ExistingFrontendBucketName:
+    Type: String
+    Default: ''
+  ExistingCloudFrontDistributionId:
+    Type: String
+    Default: ''
+  ExistingCloudFrontDomainName:
+    Type: String
+    Default: ''
+
+  CloudFrontPriceClass:
+    Type: String
+    Default: PriceClass_100
+    AllowedValues:
+      - PriceClass_100
+      - PriceClass_200
+      - PriceClass_All
+
+
+# =============================================================================
+# CONDITIONS
+# =============================================================================
+
+Conditions:
+
+  DeployFrontend: !Equals [!Ref DeployFrontendInfrastructure, 'true']
+  CreateFrontendHosting: !And
+    - !Equals [!Ref DeployFrontendInfrastructure, 'true']
+    - !Equals [!Ref ExistingFrontendBucketName, '']
+
+
+# =============================================================================
+# RESOURCES
+# =============================================================================
+
+Resources:
+
+  # ===========================================================================
+  # 01 - STORAGE
+  # ===========================================================================
+
+  StorageStack:
+    Type: AWS::CloudFormation::Stack
+
+    Properties:
+
+      TemplateURL: !Sub
+        - "https://${Bucket}.s3.${AWS::Region}.amazonaws.com/${Prefix}/01-storage.yaml"
+        - Bucket: !Ref TemplateBucketName
+          Prefix: !Ref TemplateS3Prefix
+
+      Parameters:
+        BucketPrefix: !Ref StorageBucketPrefix
+        ExistingMigrationBucketName: !Ref ExistingMigrationBucketName
+        ExistingBackupBucketName: !Ref ExistingBackupBucketName
+        ExistingArtifactBucketName: !Ref ExistingArtifactBucketName
+        LexUiBucketName: !Ref LexUiBucketName
+        LexPublishBucketName: !Ref LexPublishBucketName
+        ExistingLexUiBucketName: !Ref ExistingLexUiBucketName
+        ExistingLexPublishBucketName: !Ref ExistingLexPublishBucketName
+
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+
+  # ===========================================================================
+  # 02 - DATA
+  # ===========================================================================
+
+  DataStack:
+    Type: AWS::CloudFormation::Stack
+
+    Properties:
+
+      TemplateURL: !Sub
+        - "https://${Bucket}.s3.${AWS::Region}.amazonaws.com/${Prefix}/02-data.yaml"
+        - Bucket: !Ref TemplateBucketName
+          Prefix: !Ref TemplateS3Prefix
+
+      Parameters:
+        EnvironmentTableName: !Ref EnvironmentTableName
+        AuditTableName: !Ref AuditTableName
+        ExistingEnvironmentTableName: !Ref ExistingEnvironmentTableName
+        ExistingAuditTableName: !Ref ExistingAuditTableName
+        LexAuditTableName: !Ref LexAuditTableName
+        ExistingLexAuditTableName: !Ref ExistingLexAuditTableName
+
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+
+  # ===========================================================================
+  # 03 - SOURCE CONTROL
+  # ===========================================================================
+
+  SourceControlStack:
+    Type: AWS::CloudFormation::Stack
+
+    Properties:
+
+      TemplateURL: !Sub
+        - "https://${Bucket}.s3.${AWS::Region}.amazonaws.com/${Prefix}/03-source-control.yaml"
+        - Bucket: !Ref TemplateBucketName
+          Prefix: !Ref TemplateS3Prefix
+
+      Parameters:
+        RepositoryName: !Ref CodeCommitRepositoryName
+        ExistingRepositoryName: !Ref ExistingRepositoryName
+        LexRepositoryName: !Ref LexRepositoryName
+        ExistingLexRepositoryName: !Ref ExistingLexRepositoryName
+        LexRepositoryBranchName: !Ref LexRepositoryBranchName
+
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+
+  # ===========================================================================
+  # 04 - IAM
+  # ===========================================================================
+
+  IAMStack:
+    Type: AWS::CloudFormation::Stack
+
+    Properties:
+
+      TemplateURL: !Sub
+        - "https://${Bucket}.s3.${AWS::Region}.amazonaws.com/${Prefix}/04-iam.yaml"
+        - Bucket: !Ref TemplateBucketName
+          Prefix: !Ref TemplateS3Prefix
+
+      Parameters:
+        UILambdaRoleName: !Ref UILambdaRoleName
+        UpdateLambdaRoleName: !Ref UpdateLambdaRoleName
+        PipelineRoleName: !Ref PipelineRoleName
+        ExistingUILambdaRoleArn: !Ref ExistingUILambdaRoleArn
+        ExistingUpdateLambdaRoleArn: !Ref ExistingUpdateLambdaRoleArn
+        ExistingPipelineRoleArn: !Ref ExistingPipelineRoleArn
+        LexUILambdaRoleName: !Ref LexUILambdaRoleName
+        LexPublishLambdaRoleName: !Ref LexPublishLambdaRoleName
+        ExistingLexUILambdaRoleArn: !Ref ExistingLexUILambdaRoleArn
+        ExistingLexPublishLambdaRoleArn: !Ref ExistingLexPublishLambdaRoleArn
+        LexBotImportRoleArn: !Ref LexBotImportRoleArn
+
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+
+  # ===========================================================================
+  # 05 - UI-GC LAMBDA
+  # ===========================================================================
+
+  LambdaUiGcStack:
+    Type: AWS::CloudFormation::Stack
+
+    DependsOn:
+      - StorageStack
+      - DataStack
+      - SourceControlStack
+      - IAMStack
+
+    Properties:
+
+      TemplateURL: !Sub
+        - "https://${Bucket}.s3.${AWS::Region}.amazonaws.com/${Prefix}/05-lambda-ui-gc.yaml"
+        - Bucket: !Ref TemplateBucketName
+          Prefix: !Ref TemplateS3Prefix
+
+      Parameters:
+
+        UiGcBucketName:
+          !GetAtt StorageStack.Outputs.MigrationBucketName
+
+        BackupBucketName:
+          !GetAtt StorageStack.Outputs.BackupBucketName
+
+        EnvtTableName:
+          !GetAtt DataStack.Outputs.EnvironmentTableName
+
+        AuditTableName:
+          !GetAtt DataStack.Outputs.AuditTrailTableName
+
+        CodeCommitRepoName:
+          !GetAtt SourceControlStack.Outputs.RepositoryName
+
+        CodeCommitBranchName:
+          !Ref CodeCommitBranchName
+
+        FunctionName:
+          !Ref UiGcLambdaName
+
+        ExecutionRoleArn:
+          !GetAtt IAMStack.Outputs.UILambdaRoleArn
+
+        LambdaCodeS3Bucket:
+          !Ref LambdaCodeS3Bucket
+
+        LambdaCodeS3Key:
+          !Sub "${LambdaCodeS3Prefix}/ui-gc.zip"
+
+        MemorySize:
+          !Ref UiGcLambdaMemory
+
+        TimeoutSeconds:
+          !Ref UiGcLambdaTimeout
+
+        ExistingFunctionArn:
+          !Ref ExistingUiGcLambdaArn
+
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+
+  # ===========================================================================
+  # 06 - UPDATE CONTACT FLOW LAMBDA
+  # ===========================================================================
+
+  LambdaUpdateContactFlowStack:
+    Type: AWS::CloudFormation::Stack
+
+    DependsOn:
+      - StorageStack
+      - DataStack
+      - SourceControlStack
+      - IAMStack
+
+    Properties:
+
+      TemplateURL: !Sub
+        - "https://${Bucket}.s3.${AWS::Region}.amazonaws.com/${Prefix}/06-lambda-update-contact-flow.yaml"
+        - Bucket: !Ref TemplateBucketName
+          Prefix: !Ref TemplateS3Prefix
+
+      Parameters:
+
+        BackupBucketName:
+          !GetAtt StorageStack.Outputs.BackupBucketName
+
+        AuditTableName:
+          !GetAtt DataStack.Outputs.AuditTrailTableName
+
+        EnvtTableName:
+          !GetAtt DataStack.Outputs.EnvironmentTableName
+
+        CodeCommitRepoName:
+          !GetAtt SourceControlStack.Outputs.RepositoryName
+
+        FunctionName:
+          !Ref UpdateContactFlowLambdaName
+
+        ExecutionRoleArn:
+          !GetAtt IAMStack.Outputs.UpdateLambdaRoleArn
+
+        LambdaCodeS3Bucket:
+          !Ref LambdaCodeS3Bucket
+
+        LambdaCodeS3Key:
+          !Sub "${LambdaCodeS3Prefix}/update-contact-flow.zip"
+
+        MemorySize:
+          !Ref UpdateContactFlowLambdaMemory
+
+        TimeoutSeconds:
+          !Ref UpdateContactFlowLambdaTimeout
+
+        ExistingFunctionArn:
+          !Ref ExistingUpdateContactFlowLambdaArn
+
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+
+  # ===========================================================================
+  # 07 - API GATEWAY
+  # ===========================================================================
+
+  ApiStack:
+    Type: AWS::CloudFormation::Stack
+
+    DependsOn:
+      - LambdaUiGcStack
+      - LexLambdaUIStack
+
+    Properties:
+
+      TemplateURL: !Sub
+        - "https://${Bucket}.s3.${AWS::Region}.amazonaws.com/${Prefix}/07-api.yaml"
+        - Bucket: !Ref TemplateBucketName
+          Prefix: !Ref TemplateS3Prefix
+
+      Parameters:
+
+        ApiName:
+          !Ref ApiName
+
+        StageName:
+          !Ref ApiStageName
+
+        UILambdaArn:
+          !GetAtt LambdaUiGcStack.Outputs.FunctionArn
+
+        UILambdaName:
+          !GetAtt LambdaUiGcStack.Outputs.FunctionName
+
+        LexUILambdaArn:
+          !GetAtt LexLambdaUIStack.Outputs.LexUILambdaArn
+
+        LexUILambdaName:
+          !GetAtt LexLambdaUIStack.Outputs.LexUILambdaName
+
+        ExistingApiId:
+          !Ref ExistingApiId
+
+        ExistingApiRootResourceId:
+          !Ref ExistingApiRootResourceId
+
+        ExistingLexResourceId:
+          !Ref ExistingLexResourceId
+
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+
+  # ===========================================================================
+  # 08 - CODEPIPELINE
+  # ===========================================================================
+
+  PipelineStack:
+    Type: AWS::CloudFormation::Stack
+
+    DependsOn:
+      - StorageStack
+      - SourceControlStack
+      - IAMStack
+      - LambdaUpdateContactFlowStack
+      - LexLambdaPublishStack
+
+    Properties:
+
+      TemplateURL: !Sub
+        - "https://${Bucket}.s3.${AWS::Region}.amazonaws.com/${Prefix}/08-pipeline.yaml"
+        - Bucket: !Ref TemplateBucketName
+          Prefix: !Ref TemplateS3Prefix
+
+      Parameters:
+
+        ArtifactBucketName:
+          !GetAtt StorageStack.Outputs.ArtifactBucketName
+
+        PipelineRoleArn:
+          !GetAtt IAMStack.Outputs.PipelineRoleArn
+
+        # IVR pipeline
+        PipelineName:
+          !Ref PipelineName
+
+        RepositoryName:
+          !GetAtt SourceControlStack.Outputs.RepositoryName
+
+        RepositoryBranch:
+          !Ref CodeCommitBranchName
+
+        UpdateLambdaFunctionName:
+          !GetAtt LambdaUpdateContactFlowStack.Outputs.FunctionName
+
+        ExistingPipelineName:
+          !Ref ExistingPipelineName
+
+        # Lex pipeline
+        LexPipelineName:
+          !Ref LexPipelineName
+
+        LexRepositoryName:
+          !GetAtt SourceControlStack.Outputs.LexRepositoryName
+
+        LexRepositoryBranch:
+          !GetAtt SourceControlStack.Outputs.LexRepositoryBranchName
+
+        LexPublishBucketName:
+          !GetAtt StorageStack.Outputs.LexPublishBucketName
+
+        LexPublishLambdaFunctionName:
+          !GetAtt LexLambdaPublishStack.Outputs.LexPublishLambdaName
+
+        ExistingLexPipelineName:
+          !Ref ExistingLexPipelineName
+
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+
+  # ===========================================================================
+  # 09 - OBSERVABILITY
+  # ===========================================================================
+
+  ObservabilityStack:
+    Type: AWS::CloudFormation::Stack
+
+    DependsOn:
+      - LambdaUiGcStack
+      - LambdaUpdateContactFlowStack
+      - LexLambdaUIStack
+      - LexLambdaPublishStack
+
+    Properties:
+
+      TemplateURL: !Sub
+        - "https://${Bucket}.s3.${AWS::Region}.amazonaws.com/${Prefix}/09-observability.yaml"
+        - Bucket: !Ref TemplateBucketName
+          Prefix: !Ref TemplateS3Prefix
+
+      Parameters:
+
+        UIGCFunctionName:
+          !GetAtt LambdaUiGcStack.Outputs.FunctionName
+
+        UpdateFlowFunctionName:
+          !GetAtt LambdaUpdateContactFlowStack.Outputs.FunctionName
+
+        LexUIFunctionName:
+          !GetAtt LexLambdaUIStack.Outputs.LexUILambdaName
+
+        LexPublishFunctionName:
+          !GetAtt LexLambdaPublishStack.Outputs.LexPublishLambdaName
+
+        LogRetentionDays:
+          !Ref LogRetentionDays
+
+        ExistingUIGCLogGroupName:
+          !Ref ExistingUIGCLogGroupName
+
+        ExistingUpdateFlowLogGroupName:
+          !Ref ExistingUpdateFlowLogGroupName
+
+        ExistingLexUILogGroupName:
+          !Ref ExistingLexUILogGroupName
+
+        ExistingLexPublishLogGroupName:
+          !Ref ExistingLexPublishLogGroupName
+
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+
+  # ===========================================================================
+  # 10 - FRONTEND HOSTING
+  # ===========================================================================
+
+  FrontendHostingStack:
+    Type: AWS::CloudFormation::Stack
+
+    Condition: CreateFrontendHosting
+
+    Properties:
+
+      TemplateURL: !Sub
+        - "https://${Bucket}.s3.${AWS::Region}.amazonaws.com/${Prefix}/10-frontend-hosting.yaml"
+        - Bucket: !Ref TemplateBucketName
+          Prefix: !Ref TemplateS3Prefix
+
+      Parameters:
+
+        FrontendBucketPrefix:
+          !Ref FrontendBucketPrefix
+
+        DefaultRootObject:
+          !Ref FrontendDefaultRootObject
+
+        PriceClass:
+          !Ref CloudFrontPriceClass
+
+        ExistingFrontendBucketName:
+          !Ref ExistingFrontendBucketName
+
+        ExistingCloudFrontDistributionId:
+          !Ref ExistingCloudFrontDistributionId
+
+        ExistingCloudFrontDomainName:
+          !Ref ExistingCloudFrontDomainName
+
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+
+  # ===========================================================================
+  # 11 - LEX UI LAMBDA
+  # ===========================================================================
+
+  LexLambdaUIStack:
+    Type: AWS::CloudFormation::Stack
+
+    DependsOn:
+      - StorageStack
+      - DataStack
+      - SourceControlStack
+      - IAMStack
+
+    Properties:
+
+      TemplateURL: !Sub
+        - "https://${Bucket}.s3.${AWS::Region}.amazonaws.com/${Prefix}/11-lex-lambda-ui.yaml"
+        - Bucket: !Ref TemplateBucketName
+          Prefix: !Ref TemplateS3Prefix
+
+      Parameters:
+
+        ExistingLexUILambdaArn:
+          !Ref ExistingLexUILambdaArn
+
+        LambdaFunctionName:
+          !Ref LexUILambdaName
+
+        ExecutionRoleArn:
+          !GetAtt IAMStack.Outputs.LexUILambdaRoleArn
+
+        CodeS3Bucket:
+          !Ref LambdaCodeS3Bucket
+
+        CodeS3Key:
+          !Sub "${LambdaCodeS3Prefix}/lex-ui.zip"
+
+        LexUiBucketName:
+          !GetAtt StorageStack.Outputs.LexUiBucketName
+
+        CodeCommitRepositoryName:
+          !GetAtt SourceControlStack.Outputs.LexRepositoryName
+
+        CodeCommitBranchName:
+          !GetAtt SourceControlStack.Outputs.LexRepositoryBranchName
+
+        LexAuditTableName:
+          !GetAtt DataStack.Outputs.LexAuditTableName
+
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+
+  # ===========================================================================
+  # 12 - LEX PUBLISH LAMBDA
+  # ===========================================================================
+
+  LexLambdaPublishStack:
+    Type: AWS::CloudFormation::Stack
+
+    DependsOn:
+      - StorageStack
+      - DataStack
+      - SourceControlStack
+      - IAMStack
+
+    Properties:
+
+      TemplateURL: !Sub
+        - "https://${Bucket}.s3.${AWS::Region}.amazonaws.com/${Prefix}/12-lex-lambda-publish.yaml"
+        - Bucket: !Ref TemplateBucketName
+          Prefix: !Ref TemplateS3Prefix
+
+      Parameters:
+
+        ExistingLexPublishLambdaArn:
+          !Ref ExistingLexPublishLambdaArn
+
+        LambdaFunctionName:
+          !Ref LexPublishLambdaName
+
+        ExecutionRoleArn:
+          !GetAtt IAMStack.Outputs.LexPublishLambdaRoleArn
+
+        CodeS3Bucket:
+          !Ref LambdaCodeS3Bucket
+
+        CodeS3Key:
+          !Sub "${LambdaCodeS3Prefix}/lex-publish.zip"
+
+        SourceS3BucketName:
+          !GetAtt StorageStack.Outputs.LexPublishBucketName
+
+        CodeCommitRepositoryName:
+          !GetAtt SourceControlStack.Outputs.LexRepositoryName
+
+        CodeCommitBranchName:
+          !GetAtt SourceControlStack.Outputs.LexRepositoryBranchName
+
+        LexAuditTableName:
+          !GetAtt DataStack.Outputs.LexAuditTableName
+
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+
+# =============================================================================
+# OUTPUTS
+# =============================================================================
+
+Outputs:
+
+  # ---------------------------------------------------------------------------
+  # Storage
+  # ---------------------------------------------------------------------------
+
+  MigrationBucketName:
+    Description: Migration S3 bucket.
+    Value: !GetAtt StorageStack.Outputs.MigrationBucketName
+
+  BackupBucketName:
+    Description: Backup S3 bucket.
+    Value: !GetAtt StorageStack.Outputs.BackupBucketName
+
+  ArtifactBucketName:
+    Description: CodePipeline artifact S3 bucket.
+    Value: !GetAtt StorageStack.Outputs.ArtifactBucketName
+
+  LexUiBucketName:
+    Description: Temporary Lex UI S3 bucket.
+    Value: !GetAtt StorageStack.Outputs.LexUiBucketName
+
+  LexPublishBucketName:
+    Description: Lex publish/source S3 bucket.
+    Value: !GetAtt StorageStack.Outputs.LexPublishBucketName
+
+  # ---------------------------------------------------------------------------
+  # Data
+  # ---------------------------------------------------------------------------
+
+  EnvironmentTableName:
+    Description: Environment DynamoDB table.
+    Value: !GetAtt DataStack.Outputs.EnvironmentTableName
+
+  AuditTrailTableName:
+    Description: Audit trail DynamoDB table.
+    Value: !GetAtt DataStack.Outputs.AuditTrailTableName
+
+  LexAuditTableName:
+    Description: Lex audit trail DynamoDB table.
+    Value: !GetAtt DataStack.Outputs.LexAuditTableName
+
+  # ---------------------------------------------------------------------------
+  # Source control
+  # ---------------------------------------------------------------------------
+
+  CodeCommitRepoCloneUrlHttp:
+    Description: IVR CodeCommit HTTPS clone URL.
+    Value: !GetAtt SourceControlStack.Outputs.CloneUrlHttp
+
+  LexRepoCloneUrlHttp:
+    Description: Lex CodeCommit HTTPS clone URL.
+    Value: !GetAtt SourceControlStack.Outputs.LexCloneUrlHttp
+
+  # ---------------------------------------------------------------------------
+  # IVR Lambdas
+  # ---------------------------------------------------------------------------
+
+  UiGcLambdaArn:
+    Description: UI-GC Lambda ARN.
+    Value: !GetAtt LambdaUiGcStack.Outputs.FunctionArn
+
+  UpdateContactFlowLambdaArn:
+    Description: Update Contact Flow Lambda ARN.
+    Value: !GetAtt LambdaUpdateContactFlowStack.Outputs.FunctionArn
+
+  # ---------------------------------------------------------------------------
+  # Lex Lambdas
+  # ---------------------------------------------------------------------------
+
+  LexUILambdaArn:
+    Description: Devops-Lex-UI Lambda ARN.
+    Value: !GetAtt LexLambdaUIStack.Outputs.LexUILambdaArn
+
+  LexPublishLambdaArn:
+    Description: Devops-Lex-PublishLexZip Lambda ARN.
+    Value: !GetAtt LexLambdaPublishStack.Outputs.LexPublishLambdaArn
+
+  # ---------------------------------------------------------------------------
+  # API Gateway
+  # ---------------------------------------------------------------------------
+
+  ApiInvokeUrl:
+    Description: API Gateway invoke URL for IVR.
+    Value: !GetAtt ApiStack.Outputs.InvokeUrl
+
+  LexApiInvokeUrl:
+    Description: API Gateway invoke URL for Lex.
+    Value: !GetAtt ApiStack.Outputs.LexApiInvokeUrl
+
+  ApiId:
+    Description: Shared API Gateway ID.
+    Value: !GetAtt ApiStack.Outputs.ApiId
+
+  # ---------------------------------------------------------------------------
+  # Pipelines
+  # ---------------------------------------------------------------------------
+
+  PipelineName:
+    Description: IVR CodePipeline name.
+    Value: !GetAtt PipelineStack.Outputs.PipelineName
+
+  LexPipelineName:
+    Description: Lex CodePipeline name.
+    Value: !GetAtt PipelineStack.Outputs.LexPipelineName
+
+  # ---------------------------------------------------------------------------
+  # Frontend
+  # ---------------------------------------------------------------------------
+
+  CloudFrontDomainName:
+    Condition: DeployFrontend
+    Description: CloudFront frontend URL.
+    Value: !If
+      - CreateFrontendHosting
+      - !GetAtt FrontendHostingStack.Outputs.CloudFrontDomainName
+      - !Ref ExistingCloudFrontDomainName

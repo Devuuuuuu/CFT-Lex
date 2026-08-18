@@ -62,7 +62,7 @@ Resources:
 
       FunctionName: !Ref LambdaFunctionName
 
-      Runtime: python3.14
+      Runtime: python3.12
 
       Architectures:
         - x86_64
